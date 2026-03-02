@@ -1,7 +1,7 @@
 import math
 import os
 
-os.environ["HF_DATASETS_CACHE"] = "path/cache"
+os.environ["HF_DATASETS_CACHE"] = "/root/autodl-tmp/cache"
 
 from typing import Optional, Tuple
 import torch
@@ -45,7 +45,7 @@ def print_model_parameters(model: Ouro):
     # 打印汇总信息
     print("\n" + "="*60)
     print(f"Gridman 参数统计: {(total_params+buffer_params)/1e6:.2f} M")
-    print(f"        状态大小: {2.5 * model.config.embed_dim**2/1e6:.2f} M")
+    print(f"        状态大小: {5 * model.config.embed_dim**2/1e6:.2f} M")
     print("="*60 + "\n")
 
 
@@ -95,7 +95,7 @@ def output_error_data(
 
 
 
-def evaluate(model: Ouro, val_loader: OuroDataLoader, current_states: Tuple[Optional[torch.Tensor], ...], config=RUNNING_CONFIG):
+def evaluate(model: Ouro, val_loader: OuroDataLoader, current_states: Tuple[Optional[torch.Tensor], ...], config=RUNNING_CONFIG, min_mask_ratios=0.1):
     model.eval()
     
     # 状态克隆
@@ -124,7 +124,8 @@ def evaluate(model: Ouro, val_loader: OuroDataLoader, current_states: Tuple[Opti
                 input_patches, 
                 states=val_states,  
                 target_patches=target_patches, 
-                is_sleeping_phase=False
+                is_sleeping_phase=False,
+                min_mask_ratios=min_mask_ratios
             )
             
             loss: torch.Tensor
@@ -151,7 +152,7 @@ def evaluate(model: Ouro, val_loader: OuroDataLoader, current_states: Tuple[Opti
     return avg_loss, avg_task_loss
 
 
-def main(stage='sft', config=RUNNING_CONFIG):
+def main(stage='pretrain', config=RUNNING_CONFIG):
     # 基础设置和变量
     torch.manual_seed(config.seed)
     print(f"Using config.device: {config.device} | Gridman Sleep-Awake Architecture")
@@ -189,7 +190,7 @@ def main(stage='sft', config=RUNNING_CONFIG):
 
     warmip_steps = config.warmip_steps if not os.path.exists(ckpt_path) else 250
 
-    start_step, update_counter, states = load_checkpoint(
+    start_step, update_counter, states, _ = load_checkpoint(
         ckpt_path, model, optimizer, config.device, lambda update_counts: config.lr(update_counts, is_sft) 
     )
 
@@ -233,7 +234,7 @@ def main(stage='sft', config=RUNNING_CONFIG):
     if is_sft and start_step == 0: # SFT 初始化
         if os.path.exists(pretrain_ckpt_path):
             print("📥 Loading Pre-trained weights for SFT...")
-            _, _, states = load_checkpoint(pretrain_ckpt_path, model, optimizer, config.device, lambda update_counts: config.lr(update_counts, True))
+            _, _, states, _ = load_checkpoint(pretrain_ckpt_path, model, optimizer, config.device, lambda update_counts: config.lr(update_counts, True))
         else:
             print("⚠️ Warning: No pre-trained weights found!")
 
@@ -297,6 +298,8 @@ def main(stage='sft', config=RUNNING_CONFIG):
             input_patches = input_patches.to(config.device, non_blocking=True)
             target_patches = target_patches.to(config.device, non_blocking=True)
 
+            latest_input_patches = input_patches[0:1].detach().cpu() 
+
             # 将输入加入缓冲,用于错误转储
             span_input_buffer.append(input_patches.detach().cpu())
 
@@ -304,13 +307,16 @@ def main(stage='sft', config=RUNNING_CONFIG):
         
         # 前向传播
         with torch.amp.autocast('cuda', dtype=dtype):
+            min_mask_ratios =  2.8 * (step / config.pretrain_steps if not is_sft else step / config.sft_steps)
+
             result = model(
                 input_patches, 
                 states=states,  
                 target_patches=target_patches, 
-                is_sleeping_phase=is_sleep_mode
+                is_sleeping_phase=is_sleep_mode,
+                min_mask_ratios = min(min_mask_ratios, 0.7)
             )
-            loss, _, next_states, is_sleeping_internal, task_loss = result
+            loss, logits, next_states, is_sleeping_internal, task_loss = result
 
         assert is_sleep_mode == is_sleeping_internal
         
@@ -360,7 +366,8 @@ def main(stage='sft', config=RUNNING_CONFIG):
                         model=model, 
                         states=backup_states,
                         path=ckpt_path,
-                        override_model_dict=dirty_state_dict 
+                        override_model_dict=dirty_state_dict ,
+                        recent_patches=latest_input_patches
                     )
                     
                     print("✅ Emergency checkpoint saved. Skipping bad batch.")
@@ -395,13 +402,49 @@ def main(stage='sft', config=RUNNING_CONFIG):
                     
                     # 日志与评估
                     if update_counter % config.logging_steps == 0:
-                        val_loss, val_task_loss = evaluate(model, val_loader, states)
+                        val_loss, val_task_loss = evaluate(model, val_loader, states, min_mask_ratios=min_mask_ratios)
                         avg_logging_loss = logging_loss_accumulator / max(1, logging_span_count)
                         avg_logging_task_loss = logging_task_loss_accumulator / max(1, logging_span_count)
                         
                         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                        visualizer.plot()
+                        try:
+                            os.makedirs('res', exist_ok=True)
+                            res_file_path = os.path.join('res', f"step_{step}_preview.txt")
+                            
+                            with open(res_file_path, "w", encoding="utf-8") as f:
+                                f.write(f"Step: {step} | Update: {update_counter}\n")
+                                f.write(f"Train Loss: {avg_logging_loss:.4f} | Val Loss: {val_loss:.4f}\n")
+                                f.write("=" * 60 + "\n\n")
+
+                                pred_ids = torch.argmax(logits[0], dim=-1).detach().cpu()
+            
+                                pred_bytes = pred_ids.view(-1).tolist()
+                                pred_text = tokenizer.decode(pred_bytes)
+                                
+                                f.write(">>> [MODEL PREDICTION] (Full Chunk)\n")
+                                f.write("-" * 20 + "\n")
+                                f.write(pred_text)
+                                f.write("\n\n")
+
+                                if target_patches is not None:
+                                    target_ids = target_patches[0].detach().cpu()
+                                    target_bytes = [b for b in target_ids.view(-1).tolist() if b != -100]
+                                    target_text = tokenizer.decode(target_bytes)
+                                    
+                                    f.write(">>> [GROUND TRUTH] (Target)\n")
+                                    f.write("-" * 20 + "\n")
+                                    f.write(target_text)
+                                    f.write("\n")
+                                    
+                            print(f"📄 Generated preview saved to {res_file_path}")
+                        except Exception as e:
+                            print(f"⚠️ Failed to save preview: {e}")
+
+                        try:
+                            visualizer.plot()
+                        except:
+                            pass
                         
                         print(f"--{current_time} "
                               f"Step {step} (Upd {update_counter}) "
@@ -437,7 +480,7 @@ def main(stage='sft', config=RUNNING_CONFIG):
 
         # 保存检查点
         if step % config.save_steps == 0:
-            save_checkpoint(step, update_counter, model, states, ckpt_path)
+            save_checkpoint(step, update_counter, model, states, ckpt_path, recent_patches=latest_input_patches)
 
 
 if __name__ == "__main__":

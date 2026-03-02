@@ -49,6 +49,14 @@ class OscillatorConfig:
 
 
 @dataclass
+class HippocampusConfig:
+    embed_dim: int
+    layers: int
+    heads: int
+    dff: int
+
+
+@dataclass
 class StateTransformerConfig:
     """
     StateTransformer 配置类
@@ -78,7 +86,7 @@ class Config:
                  pretrain_steps: int,
                  sft_steps: int,
                  checkpoint_name: str,
-                 data_base='path/datasets',
+                 data_base='/proj/ouro/datasets',
                  tokenizer=ByteTokenizer()
                  ) -> None:
         # Tokenizer
@@ -86,10 +94,10 @@ class Config:
 
         # 模型参数
         self.embed_dim = embed_dim
-        self.states_len = self.embed_dim // 2
+        self.states_len = 16
 
         self.chunk_size = embed_dim
-        self.patch_size = embed_dim // 8
+        self.patch_size = embed_dim // 16
         self.byte_embed_dim = 258 
         self.byte_vocab_size = 258                      
 
@@ -98,7 +106,7 @@ class Config:
         self.wake_steps = wake_steps
         self.sleep_steps = max(self.wake_steps // 2, 1)
 
-        self.bptt_span = 4
+        self.bptt_span = 2
 
         self.cycle_len = self.wake_steps + self.sleep_steps
         self.osc_freq = 2 * math.pi / self.cycle_len  
@@ -115,7 +123,8 @@ class Config:
             heads=self.heads, 
             dff=self.embed_dim * 4,
             states_len=self.states_len,              # 与 Brian 共享相同的状态长度
-            mem_len=self.states_len * 4              # 与 Brian 共享相同的记忆长度
+            mem_len=self.states_len * 4,             # 与 Brian 共享相同的记忆长度
+            use_cross_attn=True
         )
 
         # Brain 配置
@@ -125,7 +134,8 @@ class Config:
             heads=self.heads, 
             dff=self.embed_dim * 4,
             states_len=self.states_len,              
-            mem_len=self.states_len * 4    
+            mem_len=self.states_len * 4,
+            use_cross_attn=True    
         )
 
         # Actor 配置, Actor 只是简单的 HormoneTransformer
@@ -136,7 +146,14 @@ class Config:
             heads=self.heads, 
             dff=self.embed_dim * 4,
             use_cross_attn=True,
-            num_anchors=self.patch_size // 16
+            num_anchors=self.patch_size // 8
+        )
+
+        self.hippo_config = HippocampusConfig(
+            embed_dim=self.embed_dim,
+            layers=4,             
+            heads=self.heads,
+            dff=self.embed_dim * 4
         )
 
         # 训练配置
@@ -170,7 +187,7 @@ class Config:
         self.checkpoint_name = checkpoint_name
 
         # 学习率配置
-        self.base_lr = 3e-4
+        self.base_lr = 5e-4
         self.sft_lr = 3e-6
         self.lr = self.lr_func
 
@@ -210,13 +227,12 @@ class Config:
         
         return current_lr
 
+MINI_CONFIG = Config(512, 8, 8, 32, 16, 4, 750000, 300000, 'gridman_mini')
+SMALL_CONFIG = Config(768, 12, 4, 8, 1, 4, 400000, 300000, 'gridman_s')
+MEDIUM_CONFIG = Config(1024, 16, 8, 16, 1, 4, 400000, 300000, 'gridman_m')
+LARGE_CONFIG = Config(1280, 20, 12, 24, 1, 4, 400000, 300000, 'gridman_l')
 
-MINI_CONFIG = Config(384, 6, 3, 9, 3, 4, 400000, 240000, 'gridman_mini')
-SMALL_CONFIG = Config(512, 8, 4, 12, 4, 4, 400000, 300000, 'gridman_s')
-MEDIUM_CONFIG = Config(768, 12, 6, 24, 4, 4, 1200000, 300000, 'gridman_m')
-LAGRE_CONFIG = Config(1024, 16, 8, 36, 6, 4, 500000, 300000, 'gridman_l')
-
-RUNNING_CONFIG = LAGRE_CONFIG
+RUNNING_CONFIG = MINI_CONFIG
     
 
 def preprocess_sft_dataset(dataset: DS | DatasetDict, config: Config, num_proc=20):
@@ -456,12 +472,13 @@ def save_checkpoint(
     model: nn.Module, 
     states: tuple[torch.Tensor, ...], 
     path: str,
-    override_model_dict=None
+    override_model_dict=None, 
+    recent_patches: Optional[torch.Tensor] = None
 ):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     
     # 将 Tuple 状态转为 CPU
-    states_cpu = tuple(s.detach().cpu() for s in states)
+    states_cpu = tuple(s.detach().cpu() if s is not None else None for s in states)
     
     # 修正后的权重字典, 否则获取当前模型的
     model_dict = override_model_dict if override_model_dict is not None else model.state_dict()
@@ -473,7 +490,8 @@ def save_checkpoint(
         'states': states_cpu,
         # 保存随机数状态
         'rng_state': torch.get_rng_state(),
-        'cuda_rng_state': torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+        'cuda_rng_state': torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+        'recent_patches': recent_patches.cpu() if recent_patches is not None else None
     }
 
     torch.save(checkpoint_dict, path)
@@ -492,7 +510,7 @@ def load_checkpoint(
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr(0)
             param_group['initial_lr'] = lr(0)
-        return 0, 0, None
+        return 0, 0, None, None
         
     print(f"📂 Loading checkpoint from {path}")
     ckpt: dict = torch.load(path, map_location=device)
@@ -518,4 +536,6 @@ def load_checkpoint(
         except: pass
 
     _states = tuple(s.to(device) for s in ckpt['states'])
-    return steps, update_count, _states
+    recent_patches = ckpt.get('recent_patches', None)
+
+    return steps, update_count, _states, recent_patches

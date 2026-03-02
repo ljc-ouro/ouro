@@ -9,7 +9,7 @@ from data_tools import Config, StateTransformerConfig, SQRT2
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, timescale: float = 100000.0):
+    def __init__(self, d_model: int, timescale: float = 500000.0):
         super().__init__()
         self.d_model = d_model
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(timescale) / d_model))
@@ -85,95 +85,56 @@ class NeuralOscillator(nn.Module):
 
 class Hippocampus(nn.Module):
     """
-    海马体: 负责睡眠阶段梦境生成和记忆更新
+    海马体: 用 Transformer 更新 [Mem, State] 
     """
     def __init__(self, config: Config):
         super().__init__()
-        self.embed_dim = config.embed_dim
-        self.dream_seq_len = config.embed_dim
+        hippo_cfg = config.hippo_config
+        self.mem_len = config.brain_config.mem_len
+        self.states_len = config.brain_config.states_len
         
-        # Inception 组件, 梦境生成 
-        self.osc_proj = nn.Linear(2, self.embed_dim)
-        self.dream_anchors = nn.Parameter(torch.randn(1, self.dream_seq_len, self.embed_dim))
-        self.dream_attention = nn.MultiheadAttention(self.embed_dim, num_heads=config.brain_config.heads, batch_first=True, dropout=0.1)
-
-        self.dream_state_norm = nn.LayerNorm(self.embed_dim)
-        self.dream_mem_norm = nn.LayerNorm(self.embed_dim)
-        self.dream_norm = nn.LayerNorm(self.embed_dim)
+        self.layers = nn.ModuleList([
+            nn.TransformerEncoderLayer(
+                d_model=hippo_cfg.embed_dim,
+                nhead=hippo_cfg.heads,
+                dim_feedforward=hippo_cfg.dff,
+                dropout=0.1,
+                activation='gelu',
+                batch_first=True
+            ) for _ in range(hippo_cfg.layers)
+        ])
         
-        # Consolidate 组件
-        # State -> Mem 
-        self.mem_input_norm = nn.LayerNorm(self.embed_dim)
-        self.mem_attn = nn.MultiheadAttention(self.embed_dim, num_heads=config.heads, batch_first=True)
-        self.mem_gate = nn.Sequential(
-            nn.Linear(self.embed_dim * 2, self.embed_dim),
-            nn.Sigmoid()
-        )
-        self.mem_update_norm = nn.LayerNorm(self.embed_dim)
-
-        # Mem -> State
-        self.state_input_norm = nn.LayerNorm(self.embed_dim)
-        self.state_attn = nn.MultiheadAttention(self.embed_dim, num_heads=config.heads, batch_first=True)
-        self.state_gate = nn.Sequential(
-            nn.Linear(self.embed_dim * 2, self.embed_dim),
-            nn.Sigmoid()
-        )
-        self.state_update_norm = nn.LayerNorm(self.embed_dim)
+        self.pos_encoder = PositionalEncoding(hippo_cfg.embed_dim)
         
-        self.noise_scale = 0.05
+        self.input_norm = nn.LayerNorm(hippo_cfg.embed_dim)
+        self.output_norm = nn.LayerNorm(hippo_cfg.embed_dim)
 
-    def inception(self, mem: torch.Tensor, state: torch.Tensor, osc_state: torch.Tensor) -> torch.Tensor:
-        """
-        梦境生成: 根据当前节律和记忆生成伪输入序列
-        """
-        B = mem.size(0)
-
+    def forward(self, mem: torch.Tensor, state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = mem.device
+        
+        combined = torch.cat([mem, state], dim=1)
+        combined = self.input_norm(combined)
+        
+        idx_mem = torch.arange(-self.mem_len, 0, dtype=torch.float, device=device)
+        idx_state = torch.arange(0, self.states_len, dtype=torch.float, device=device)
+        
+        all_indices = torch.cat([idx_mem, idx_state])
+        
+        # 位置编码
+        hidden = self.pos_encoder(combined, all_indices)
+        
+        for layer in self.layers:
+            hidden = checkpoint(layer, hidden, use_reentrant=False)
+            
+        out = self.output_norm(hidden)
+        
+        new_mem = out[:, :self.mem_len, :]
+        new_state = out[:, self.mem_len:, :]
+        
         # 归一化
-        mem = self.dream_mem_norm(mem)
-        state = self.dream_state_norm(state)
-
-        context = torch.cat([mem, state], dim=1) 
-        
-        rhythm_tone = self.osc_proj(osc_state).unsqueeze(1)
-        dream_queries = self.dream_anchors.expand(B, -1, -1) + rhythm_tone
-        
-        dream_seq, _ = self.dream_attention(query=dream_queries, key=context, value=context, need_weights=False)
-        
-        noise = torch.randn_like(dream_seq) * self.noise_scale
-        dream_seq = self.dream_norm(dream_seq + noise)
-        
-        return F.normalize(input=dream_seq, p=2, dim=-1, eps=1e-5)
-
-    def consolidate(self, mem: torch.Tensor, state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        记忆固化: 睡眠时调用，双向更新 Mem 和 State
-        """
-        # 归一化
-        mem = self.mem_input_norm(mem)
-        state = self.state_input_norm(state)
-
-        # Mem 更新: Q=Mem, K=State, V=State
-        delta_mem, _ = self.mem_attn(query=mem, key=state, value=state, need_weights=False)
-        
-        gate_in_m = torch.cat([mem, delta_mem], dim=-1)
-        z_m = self.mem_gate(gate_in_m)
-        
-        # mem 更新
-        new_mem = self.mem_update_norm((1 - z_m) * mem + z_m * delta_mem)
-        
-        # State 更新: Q=State, K=New_Mem, V=New_Mem
-        delta_state, _ = self.state_attn(query=state, key=new_mem, value=new_mem, need_weights=False)
-        
-        # 注入噪声
-        noise = torch.randn_like(delta_state) * self.noise_scale
-        
-        gate_in_s = torch.cat([state, delta_state], dim=-1)
-        z_s = self.state_gate(gate_in_s)
-        
-        new_state = self.state_update_norm((1 - z_s) * state + z_s * (delta_state + noise))
-
-        new_state = F.normalize(new_state, p=2, dim=-1, eps=1e-5)
         new_mem = F.normalize(new_mem, p=2, dim=-1, eps=1e-5)
+        new_state = F.normalize(new_state, p=2, dim=-1, eps=1e-5)
+        
         return new_mem, new_state
     
 
@@ -192,11 +153,13 @@ class Hypothalamus(nn.Module):
         # 激素网络
         self.network = nn.Sequential(
             nn.Linear(total_input_dim, total_input_dim),
-            nn.LayerNorm(total_input_dim),
-            nn.SiLU(), 
-            nn.Linear(total_input_dim, self.hormone_dim),
-            nn.Tanh(),  
-            nn.Linear(self.hormone_dim, self.hormone_dim),
+            nn.GELU(), 
+            nn.Linear(total_input_dim, self.hormone_dim * 4),
+            nn.GELU(), 
+            nn.Linear(self.hormone_dim * 4, self.hormone_dim * 2),
+            nn.GELU(), 
+            nn.Linear(self.hormone_dim * 2, self.hormone_dim),
+            nn.GELU(),
             nn.LayerNorm(self.hormone_dim),
             nn.Tanh() 
         )
@@ -226,7 +189,7 @@ class Hypothalamus(nn.Module):
 
         hormone_delta = F.normalize(input=hormone_delta, p=2, dim=-1, eps=1e-5)
         
-        # 当前的激素水平 = 过去水平 * 0.95 + 新调节量 * 0.05
+        # 当前的激素水平 
         new_hormone = self.buffer_norm(0.9 * self.current_hormone + 0.1 * hormone_delta)
         
         # 更新内部缓存
@@ -416,8 +379,7 @@ class SelfEncoder(nn.Module):
 
 class StateTransformer(nn.Module):
     """
-    结构: [Mem | State_Read | Input | State_Write]
-    序列总长度 4 * embed_dim, Input 最大长度 embed_dim
+    结构: Mem * [State_Read | Input | State_Write]
     """
     def __init__(self, config: StateTransformerConfig, self_encoder: SelfEncoder):
         super().__init__()
@@ -433,8 +395,7 @@ class StateTransformer(nn.Module):
         self.mem_norm = nn.LayerNorm(config.embed_dim)
         
         # 位置编码
-        self.max_logical_pos = config.states_len * 8
-        
+        self.max_logical_pos = config.states_len * 12
         self.pos_encoder = PositionalEncoding(config.embed_dim)
         
         # 状态槽位 Embedding, 区分同一个 State 在 Read 和 Write 位置的不同角色
@@ -454,22 +415,17 @@ class StateTransformer(nn.Module):
         
     def _create_sandwich_mask(self, total_len, input_len, device):
         """
-        创建掩码:
-        Prefix (Mem + Read): 内部全互联
+        Prefix (Read): 内部全互联
         Input: Causal (看 Prefix + 之前的 Input)
         Write: Full Context (看前面所有)
         """
-        end_read = self.config.mem_len + self.config.states_len
+        end_read = self.config.states_len
         end_input = end_read + input_len
         
-        # 基础 Causal Mask
         mask = torch.ones((total_len, total_len), device=device, dtype=torch.bool)
         mask = torch.triu(mask, diagonal=1)
         
-        # Prefix 
         mask[:end_read, :end_read] = False
-        
-        # Write 
         mask[end_input:, :] = False 
         
         return mask
@@ -480,67 +436,45 @@ class StateTransformer(nn.Module):
         _, inputs_len, _ = x_chunk.shape
         device = x_chunk.device
         
-        # 归一化
         x_input_norm = self.input_norm(x_chunk)
-        mem_norm = self.mem_norm(prev_memory)
+        mem_norm = self.mem_norm(prev_memory)    # Mem 将作为 context 
         state_norm = self.state_norm(prev_state)
         
-        # Mem
-        part_mem = mem_norm
-        
-        # State Read 
         part_read = state_norm + self.read_slot_emb
-        
-        # Input
         part_input = x_input_norm
         
-        # State Write
-        self_encode: torch.Tensor = self.self_encoder(state_norm, need_update_self)
+        self_encode = self.self_encoder(state_norm, need_update_self)
         part_write = state_norm + self.write_slot_emb + self_encode.expand(-1, self.config.states_len, -1)
         
-        # 拼接
-        combined_input = torch.cat([part_mem, part_read, part_input, part_write], dim=1)
+        combined_input = torch.cat([part_read, part_input, part_write], dim=1)
         
         # 位置索引
-        
-        # Mem: [-M ... -1]
-        idx_mem = torch.arange(-self.config.mem_len, 0, dtype=torch.float, device=device)
-        # Read: [0 ... 0]
         idx_read = torch.zeros(self.config.states_len, dtype=torch.float, device=device)
-        # Input: [1 ... L]
         idx_input = torch.arange(1, inputs_len + 1, dtype=torch.float, device=device)
-        # Write: [Fixed ... Fixed]
         idx_write = torch.full((self.config.states_len,), self.max_logical_pos, dtype=torch.float, device=device)
         
-        all_indices = torch.cat([idx_mem, idx_read, idx_input, idx_write])
-        
-        # 注入位置编码与 Transformer 计算 
+        all_indices = torch.cat([idx_read, idx_input, idx_write])
         hidden = self.pos_encoder(combined_input, all_indices)
         
         total_len = hidden.size(1)
         mask = self._create_sandwich_mask(total_len, inputs_len, device)
         
         for layer in self.layers:
-            hidden = checkpoint(layer, hidden, hormone, mask, use_reentrant=False)
+            hidden = checkpoint(layer, hidden, hormone, mask, mem_norm, use_reentrant=False)
             
-        # 输出
-        start_input = self.config.mem_len + self.config.states_len
+        # 偏移量更新 
+        start_input = self.config.states_len
         end_input = start_input + inputs_len
         
-        # 截取 Text Output
         text_output_raw = hidden[:, start_input : end_input, :]
-        
-        # 截取 New State
         new_state_raw = hidden[:, end_input:, :]
         
-        # 输出归一化
         text_output = self.text_output_norm(text_output_raw, hormone)
         text_output = F.normalize(text_output, p=2, dim=-1, eps=1e-5)
         
         new_state = self.state_output_norm(new_state_raw, hormone)
         new_state = F.normalize(new_state, p=2, dim=-1, eps=1e-5)
         
-        # Mem 在此前向过程中不产生新值，保持只读
         return text_output, new_state
     
 
@@ -669,7 +603,7 @@ class Sensor(nn.Module):
 
 class Decompressor(nn.Module):
     """
-    解压器: 将 Brain 的 1 个向量扩展为 K 个高维锚点
+    解压器: 将 Brain 的 1 个向量扩展为 K 个锚点
     """
     def __init__(self, input_dim: int, num_anchors: int):
         super().__init__()
@@ -707,20 +641,22 @@ class Decompressor(nn.Module):
 
 class Actor(nn.Module):
     """
-    生成字节流
+    生成字节流 NAR
     """
     def __init__(self, config: Config):
         super().__init__()
         self.patch_size = config.patch_size
-        self.vocab_size = config.byte_vocab_size
-        self.dim = config.actor_config.embed_dim
-
-        self.num_anchors = config.actor_config.num_anchors
-        self.decompressor = Decompressor(config.embed_dim, self.num_anchors)
-
-        self.hormone_proj = nn.Linear(config.embed_dim//4, self.dim//4)
+        self.vocab_size = config.byte_vocab_size 
+        self.mask_id = self.vocab_size           # MASK ID = 258
+        self.embed_vocab_size = self.mask_id + 1 # 259
         
-        self.byte_embedding = nn.Embedding(self.vocab_size, self.dim)
+        self.dim = config.actor_config.embed_dim
+        self.num_anchors = config.actor_config.num_anchors
+        
+        self.decompressor = Decompressor(config.embed_dim, self.num_anchors)
+        self.hormone_proj = nn.Linear(config.embed_dim // 4, self.dim // 4)
+        
+        self.byte_embedding = nn.Embedding(self.embed_vocab_size, self.dim)
         self.pos_embedding = nn.Parameter(torch.randn(1, 1, self.patch_size, self.dim))
         
         self.decoder_layer = nn.ModuleList([
@@ -730,12 +666,6 @@ class Actor(nn.Module):
 
         self.final_norm = HormoneReceptor(nn.LayerNorm(self.dim), config.actor_config)
         self.head = nn.Linear(self.dim, self.vocab_size)
-        self.global_sos = nn.Parameter(torch.randn(1, 1, 1, self.dim))
-
-    def _generate_square_subsequent_mask(self, sz, device):
-        mask = (torch.triu(torch.ones(sz, sz, device=device)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        return mask
 
     def forward(self, thought_stream: torch.Tensor, 
                 target_patches: Optional[torch.Tensor] = None, 
@@ -744,97 +674,107 @@ class Actor(nn.Module):
                 prev_last_tokens: Optional[torch.Tensor] = None,
                 force_prefix: Optional[torch.Tensor] = None,
                 temperature: float = 1.0,
-                top_k: int = 0) -> torch.Tensor:
+                top_k: int = 0,
+                min_mask_ratios=0.1
+                ) -> torch.Tensor:
+        
         B, S, _ = thought_stream.shape
         P = self.patch_size
         device = thought_stream.device
 
+        # 解压 thought 
         context_flat = self.decompressor(thought_stream, prev_thought)
         
-        # 起始 Embedding (SOS)
-        if prev_last_tokens is not None:
-            sos_emb = self.byte_embedding(prev_last_tokens).unsqueeze(2)
-        else:
-            sos_emb = self.global_sos.expand(B, S, 1, -1)
-
         # 展开激素
         if hormone is not None:
             hormone = self.hormone_proj(hormone) 
             H_dim = self.decoder_layer[0].norm2.hormone_dim
-            hormone_flat = hormone.expand(-1, S, -1).reshape(B*S, 1, H_dim)
+            hormone_flat = hormone.expand(-1, S, -1).reshape(B * S, 1, H_dim)
         else:
             hormone_flat = None
 
-        # Teacher Forcing 训练
         if target_patches is not None:
             clean_targets = target_patches.clone()
-            clean_targets[clean_targets == -100] = 0 
-            target_emb = self.byte_embedding(clean_targets)
-
-            decoder_input = torch.cat([sos_emb, target_emb[:, :, :-1, :]], dim=2)
-            decoder_input = decoder_input + self.pos_embedding
+            clean_targets[clean_targets == -100] = 0 # 处理 PAD
             
-            flat_input = decoder_input.view(B * S, P, -1)
-            mask = self._generate_square_subsequent_mask(P, device).to(dtype=flat_input.dtype)
+            # 随机 mask
+            mask_ratios = torch.rand((B, S, 1), device=device) * (1-min_mask_ratios) + min_mask_ratios 
+            mask_ratios[mask_ratios > 0.85] = 1.0
             
-            x = flat_input
+            prob_matrix = torch.rand((B, S, P), device=device)
+            mask_indices = prob_matrix < mask_ratios
+            
+            masked_inputs = clean_targets.clone()
+            masked_inputs[mask_indices] = self.mask_id
+            
+            decoder_input = self.byte_embedding(masked_inputs) + self.pos_embedding
+            x = decoder_input.view(B * S, P, -1)
+            
             for layer in self.decoder_layer:
-                x = layer(x, hormone_flat, src_mask=mask, context=context_flat)
+                x = checkpoint(layer, x, hormone_flat, src_mask=None, context=context_flat, use_reentrant=False)
 
             out_feat = self.final_norm(x, hormone_flat)
-            return self.head(out_feat.view(B, S, P, -1))
+            logits = self.head(out_feat.view(B, S, P, -1))
+            
+            return logits
 
-        # 推理 
         else:
-            # SOS
-            current_seq_emb = sos_emb + self.pos_embedding[:,:,0:1,:]
-            generated_ids = []
-            
-            for t in range(P):
-                # 当前序列长度 L
-                L = current_seq_emb.size(2)
-                flat_emb = current_seq_emb.view(B * S, L, -1)
-                mask = self._generate_square_subsequent_mask(L, device).to(dtype=flat_emb.dtype)
-    
-                x = flat_emb
-                for layer in self.decoder_layer:
-                    x = layer(x, hormone_flat, src_mask=mask, context=context_flat)
-                
-                # 取最后一个时间步的输出
-                last_feat = self.final_norm(x[:, -1:, :], hormone_flat)
-                logits_step = self.head(last_feat).squeeze(1) # [B*S, Vocab]
-                
-                # 前缀强制或采样
-                if force_prefix is not None and t < force_prefix.size(1):
-                    # 强行选择前缀指定的 Token
-                    next_token = force_prefix[:, t].reshape(B * S)
-                else:
-                    # 采样逻辑
-                    if temperature != 1.0:
-                        logits_step = logits_step / max(temperature, 1e-6)
-                    
-                    if top_k > 0:
-                        v, _ = torch.topk(logits_step, min(top_k, self.vocab_size))
-                        logits_step[logits_step < v[:, [-1]]] = -float('Inf')
-                    
-                    probs = F.softmax(logits_step, dim=-1)
-                    next_token = torch.multinomial(probs, num_samples=1).squeeze(-1)
-            
-                generated_ids.append(next_token.view(B, S, 1))
-                
-                # 准备下一步的输入
-                if t < P - 1:
-                    next_emb = self.byte_embedding(next_token).view(B, S, 1, -1)
-                    next_input = next_emb + self.pos_embedding[:, :, t+1:t+2, :]
-                    current_seq_emb = torch.cat([current_seq_emb, next_input], dim=2)
-            
-            # 汇总结果并构造伪 Logits 兼容 argmax
-            stacked_ids = torch.cat(generated_ids, dim=2) # [B, S, P]
-            fake_logits = torch.full((B, S, P, self.vocab_size), -100.0, device=device)
-            fake_logits.scatter_(3, stacked_ids.unsqueeze(-1), 100.0)
-            
-            return fake_logits
+            current_tokens = torch.full((B, S, P), self.mask_id, dtype=torch.long, device=device)
 
+            # 前缀注入
+            if force_prefix is not None:
+                prefix_len = force_prefix.size(-1)
+                current_tokens[:, :, :prefix_len] = force_prefix
+
+            # 第一轮前向
+            decoder_input = self.byte_embedding(current_tokens) + self.pos_embedding
+            x = decoder_input.view(B * S, P, -1)
+            
+            for layer in self.decoder_layer:
+                x = layer(x, hormone_flat, src_mask=None, context=context_flat)
+                
+            out_feat = self.final_norm(x, hormone_flat)
+            logits_step1 = self.head(out_feat.view(B, S, P, -1)) # [B, S, P, V]
+
+            # 获取第一轮的概率分布
+            probs_step1 = F.softmax(logits_step1, dim=-1)
+            confidences, predicted_tokens = torch.max(probs_step1, dim=-1) # [B, S, P]
+
+            # 保护强制前缀
+            if force_prefix is not None:
+                prefix_len = force_prefix.size(-1)
+                confidences[:, :, :prefix_len] = float('inf')
+                predicted_tokens[:, :, :prefix_len] = force_prefix
+            
+            mask_ratio = 0.5 
+            mask_count = max(1, int(P * mask_ratio))
+            
+            kth_values = torch.kthvalue(confidences.view(B * S, P), mask_count, dim=-1).values
+            thresholds = kth_values.view(B, S, 1)
+            
+            # 重新生成带 MASK 的混合序列
+            re_mask_indices = confidences <= thresholds
+            refined_tokens = predicted_tokens.clone()
+            refined_tokens[re_mask_indices] = self.mask_id # 低置信度的变回 MASK
+
+            # 第二轮前向传播 
+            decoder_input_2 = self.byte_embedding(refined_tokens) + self.pos_embedding
+            x2 = decoder_input_2.view(B * S, P, -1)
+            
+            for layer in self.decoder_layer:
+                x2 = layer(x2, hormone_flat, src_mask=None, context=context_flat)
+                
+            out_feat_2 = self.final_norm(x2, hormone_flat)
+            final_logits = self.head(out_feat_2.view(B, S, P, -1))
+
+            if temperature != 1.0:
+                final_logits = final_logits / max(temperature, 1e-6)
+            
+            if top_k > 0:
+                v, _ = torch.topk(final_logits, min(top_k, self.vocab_size), dim=-1)
+                final_logits[final_logits < v[..., [-1]]] = -float('Inf')
+            
+            return final_logits
 
 class Brain(nn.Module):
     def __init__(self, config: Config, self_encoder: SelfEncoder):
@@ -905,7 +845,8 @@ class Ouro(nn.Module):
                 override_last_tokens: Optional[torch.Tensor] = None,
                 force_prefix: Optional[torch.Tensor] = None,
                 temperature: float = 1.0,
-                top_k: int = 0
+                top_k: int = 0,
+                min_mask_ratios=0.1
                 ) -> tuple[torch.Tensor, Optional[torch.Tensor], tuple[torch.Tensor, torch.Tensor, torch.Tensor], bool]: 
         
         # 状态初始化
@@ -925,14 +866,11 @@ class Ouro(nn.Module):
             
         # 睡眠
         if is_sleeping:
-            dream_input = self.hippocampus.inception(brain_mem, brain_state, next_osc_state)
-            hormone = self.hypothalamus.get_hormone(dream_input, next_osc_state)
-            _, _, brain_state = self.brain(dream_input, brain_mem, brain_state, hormone)
-
-            next_brain_mem, next_brain_state = self.hippocampus.consolidate(brain_mem, brain_state)
+            next_brain_mem, next_brain_state = self.hippocampus(brain_mem, brain_state)
+            
             zero_loss = torch.tensor(0.0, device=device, dtype=next_osc_state.dtype)
 
-            return zero_loss, None, (next_brain_mem, next_brain_state, brain_state, next_osc_state), True, zero_loss
+            return zero_loss, None, (next_brain_mem, next_brain_state, None, next_osc_state), True, zero_loss
         
         # 清醒
         else:
@@ -957,7 +895,8 @@ class Ouro(nn.Module):
                 prev_last_tokens=prev_last_tokens,
                 force_prefix=force_prefix,
                 temperature=temperature,
-                top_k=top_k
+                top_k=top_k,
+                min_mask_ratios=min_mask_ratios
             )
             
             # Loss
