@@ -59,6 +59,7 @@ class OuroLayer(nn.Module):
         if self.need_mem:
             # 全局记忆矩阵 
             self.mem = torch.zeros(self.embed_dim, self.embed_dim)
+            self.mem_g = nn.Linear(embed_dim, embed_dim)
 
             self.mem_norm = nn.LayerNorm(embed_dim)
 
@@ -132,23 +133,23 @@ class OuroLayer(nn.Module):
 
             # 计算真实 V 与预测 V 的 Delta
             delta_v = context_v - v_retrieved
-            v_dyn = context_g * delta_v  
-           
-            # 记忆衰减
-            decay_rate = 0.99 
+            v_dyn = context_g * delta_v
             
             # 外积更新
             delta_mem: torch.Tensor = torch.bmm(context_k.transpose(-1, -2), v_dyn) / (self.embed_dim ** 0.5)
-            next_mem: torch.Tensor = (prev_mem * decay_rate + delta_mem) 
             
             # 记忆更新
+            mem_g: torch.Tensor = self.act(self.mem_g(prev_mem + delta_mem))
+            mem_g = torch.sigmoid(mem_g)
+            next_mem: torch.Tensor = (mem_g * prev_mem + delta_mem)
+
             self.mem = next_mem.mean(0, keepdim=True)
 
             # q_t @ [prev_mem * decay + cumsum(k^T @ v_dyn) / (self.embed_dim ** 0.5)]
             # (q_t @ prev_mem) + (q_t @ k^T) @ v_dyn
             
             # 历史记忆 
-            mem_out_prev = torch.bmm(context_q, prev_mem) * decay_rate
+            mem_out_prev = torch.bmm(context_q, prev_mem)
             
             # Q 与 K 的标准注意力打分矩阵 (Q @ K^T) -> [B, L, L]
             scores = torch.bmm(context_q, context_k.transpose(-1, -2))

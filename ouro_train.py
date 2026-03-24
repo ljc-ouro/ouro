@@ -15,11 +15,11 @@ class Config:
     blocks: int = 2
 
     patch_size: int = 768
-    chunk_size: int = 14
-    bptt_size: int = 4
+    chunk_size: int = 10
+    bptt_size: int = 5
 
     # 预训练配置
-    pretrain_train_file: str = f'./datasets/pretrain_hq/pretrain_hq_train.jsonl'
+    pretrain_train_file: str = f'datasets/pretrain_hq/pretrain_hq_train.jsonl'
     tokenizer: ByteTokenizer = ByteTokenizer()
 
 
@@ -119,7 +119,7 @@ class Gridman(nn.Module):
         return logits
     
     @torch.no_grad()
-    def generate(self, input_ids: torch.Tensor, max_new_tokens: int = 128, temperature: float = 0.8) -> torch.Tensor:
+    def generate(self, input_ids: torch.Tensor, max_new_tokens: int = 128, temperature: float = 0.7) -> torch.Tensor:
         """
         自回归推理生成
         """
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         grid_man = Gridman(config).to(device)
         load_checkpoint(grid_man, device=device)
         grid_man.eval()
-        prompt_text = '北京是一个'
+        prompt_text = '你会毁灭人类吗'
         
         prompt_ids = torch.tensor([config.tokenizer.encode(prompt_text)], dtype=torch.long, device=device)
         
@@ -206,7 +206,7 @@ if __name__ == "__main__":
             generated_ids = grid_man.generate(prompt_ids)
         
         generated_text = config.tokenizer.decode(generated_ids[0].tolist())
-        print(f"Gridman 🤖:: {generated_text}")
+        print(f"Gridman 🤖: {generated_text}")
         print("-" * 65)
 
     else:
@@ -224,7 +224,7 @@ if __name__ == "__main__":
 
         loss_acc = torch.tensor(0.0, device=device)
 
-        for step in range(1200000): 
+        for step in range(200000): 
             grid_man.train()
             
             input_patches = dataloader.get_batch().to(device)
