@@ -58,7 +58,8 @@ class OuroLayer(nn.Module):
         # 开启标准的 Delte Rule 实现
         if self.need_mem:
             # 全局记忆矩阵 
-            self.mem = torch.zeros(self.embed_dim, self.embed_dim)
+            self.mem: torch.Tensor
+            self.register_buffer('mem', torch.zeros(1, self.embed_dim, self.embed_dim))
             self.mem_g = nn.Linear(embed_dim, embed_dim)
 
             self.mem_norm = nn.LayerNorm(embed_dim)
@@ -243,7 +244,7 @@ class OuroBlock(nn.Module):
 
         batch_size, seq_len, _ = x.shape
 
-        # 涌现注意力
+        # 涌现注意力 (Emergent Attention)
         ouro_self_attn_residual = ouro_self_attn
         ouro_self_attn = torch.bmm(ouro_self_attn, x)
         ouro_self_attn_proj = self.ouro_self_attn_proj.unsqueeze(0).expand(batch_size, -1, -1)
