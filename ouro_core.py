@@ -9,19 +9,22 @@ class ByteTokenizer:
     字节 Tokenizer, 无需训练, 全世界通用
     """
     def __init__(self):
-        # 填充符
+        # 基础特殊符号
         self.pad_token_id = 256 
-        # 终止符
-        self.eos_token_id = 257
+        self.eos_token_id = 257   
+        
+        # 特殊符号
+        self.system_token_id = 258
+        self.user_token_id = 259
+        self.assistant_token_id = 260
 
-        self.vocab_size = self.eos_token_id + 1
+        # 预留部分
+        self.vocab_size = 300
 
     def encode(self, text: str) -> list[int]:
-        # 将文本转为 UTF-8 字节列表
         return list(text.encode('utf-8'))
 
     def decode(self, ids: list[int]) -> str:
-        # 过滤特殊 token 并解码
         clean_ids = [i for i in ids if 0 <= i < 256]
         return bytes(clean_ids).decode('utf-8', errors='replace')
     
@@ -83,7 +86,11 @@ class OuroLayer(nn.Module):
         if self.need_mem:
             self.mem = self.mem.detach()
 
-    def forward(self, x: torch.Tensor, seq_dim: int = 1) -> tuple[torch.Tensor, torch.Tensor | None]:
+    def mem_clear(self):
+        if self.need_mem:
+            self.mem = torch.zeros(1, self.embed_dim, self.embed_dim)
+
+    def forward(self, x: torch.Tensor, seq_dim: int = 1, lock_mem: bool = False) -> tuple[torch.Tensor, torch.Tensor | None]:
         if seq_dim < 0:
             seq_dim = x.dim() + seq_dim
 
@@ -117,6 +124,7 @@ class OuroLayer(nn.Module):
         """
         # 构建动态的 FFN 层 [prev_mem * decay + cumsum(k^T @ v_dyn) / (self.embed_dim ** 0.5)] @ w_o
         if self.need_mem:
+            # print(self.mem.norm())
             context: torch.Tensor = self.mem_norm(x_mlp + context)
 
             context_q: torch.Tensor = self.w_q(context)
@@ -144,7 +152,8 @@ class OuroLayer(nn.Module):
             mem_g = torch.sigmoid(mem_g)
             next_mem: torch.Tensor = (mem_g * prev_mem + delta_mem)
 
-            self.mem = next_mem.mean(0, keepdim=True)
+            if not lock_mem:
+                self.mem = next_mem.mean(0, keepdim=True)
 
             # q_t @ [prev_mem * decay + cumsum(k^T @ v_dyn) / (self.embed_dim ** 0.5)]
             # (q_t @ prev_mem) + (q_t @ k^T) @ v_dyn
@@ -219,6 +228,11 @@ class OuroBlock(nn.Module):
             layer: OuroLayer
             layer.mem_detach()
 
+    def mem_clear(self):
+        for layer in self.ouro_layers:
+            layer: OuroLayer
+            layer.mem_clear()
+
     @staticmethod
     def is_prime(n):
         if n <= 1:
@@ -287,6 +301,11 @@ class Ouro(nn.Module):
         for blocks in self.ouro_blocks:
             blocks: OuroBlock
             blocks.mem_detach()
+
+    def mem_clear(self):
+        for blocks in self.ouro_blocks:
+            blocks: OuroBlock
+            blocks.mem_clear()
 
     def forward(self, x: torch.Tensor, seq_dim: int = 1) -> torch.Tensor:
         for block in self.ouro_blocks:

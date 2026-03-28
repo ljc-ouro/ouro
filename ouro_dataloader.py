@@ -3,25 +3,21 @@ import json
 import torch
 
 from ouro_core import ByteTokenizer
-    
 
 class StreamLoader:
-    """
-    流式数据加载器, 多端点并行流读取
-    """
-    def __init__(self, patch_size: int, chunk_size: int, datasets: str):
+    def __init__(self, patch_size: int, chunk_size: int, datasets: str, is_sft: bool = False):
         self.datasets = datasets
         self.chunk_size = chunk_size
         self.patch_size = patch_size + 1
         self.tokenizer = ByteTokenizer()
+        self.is_sft = is_sft
         
-        print(f"📦 初始化流式数据加载: {self.datasets}...")
+        mode = 'SFT' if self.is_sft else 'PRE-TRAIN'
+        print(f'📦 初始化流式数据加载 [{mode}]: {self.datasets}...')
         
-        # 为每个 chunk 维护 buffer 和迭代器
         self.buffers = [[] for _ in range(self.chunk_size)]
         self.iterators = []
         
-        # 计算文件等分点
         file_size = os.path.getsize(self.datasets)
         step_size = file_size // self.chunk_size
         
@@ -41,29 +37,66 @@ class StreamLoader:
                         continue
                     try:
                         decoded_line = line.decode('utf-8')
-                        example = json.loads(decoded_line)
-                        text = example.get('text', '')
-                        if text:
+                        example: dict[str, str | list[dict[str, str]]] = json.loads(decoded_line)
+                        
+                        if self.is_sft:
+                            conversations = example.get('conversations', [])
+                            for turn in conversations:
+                                role = turn['role']
+                                content = turn['content']
+                                
+                                # 将角色映射为具体的 Token ID
+                                if role == 'system':
+                                    role_id = self.tokenizer.system_token_id
+                                elif role == 'user':
+                                    role_id = self.tokenizer.user_token_id
+                                elif role == 'assistant':
+                                    role_id = self.tokenizer.assistant_token_id
+                                else:
+                                    continue 
+                                
+                                if role == 'assistant':
+                                    yield (role_id, 0)
+                                    
+                                    # Assistant 的内容, mask=1
+                                    for t in self.tokenizer.encode(content):
+                                        yield (t, 1)
+                                    yield (self.tokenizer.eos_token_id, 1)
+                                else:
+                                    yield (role_id, 0)
+                                    for t in self.tokenizer.encode(content):
+                                        yield (t, 0)
+                                    yield (self.tokenizer.eos_token_id, 0)
+                                    
+                        else:
+                            # 预训练模式
+                            text: str = example.get('text', '')
                             text = text.replace('<|im_end|>', '')
-                            yield from self.tokenizer.encode(text)
-                            yield self.tokenizer.eos_token_id
+                            if text:
+                                for t in self.tokenizer.encode(text):
+                                    yield (t, 1)
+                                yield (self.tokenizer.eos_token_id, 1)
+                                
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         continue
             
-            # 末尾从头循环
             start_offset = 0
 
-    def get_batch(self) -> torch.Tensor:
-        # 从 n 个流中分别读取 patch_size 个 token
+    def get_batch(self) -> tuple[torch.Tensor, torch.Tensor]:
+        # 分别读取 patch_size (token, mask) 
         for i in range(self.chunk_size):
             while len(self.buffers[i]) < self.patch_size:
                 self.buffers[i].append(next(self.iterators[i]))
         
-        batch_bytes = []
+        batch_tokens = []
+        batch_masks = []
         for i in range(self.chunk_size):
-            batch_bytes.append(self.buffers[i][:self.patch_size])
+            chunk_data = self.buffers[i][:self.patch_size]
+            batch_tokens.append([x[0] for x in chunk_data])
+            batch_masks.append([x[1] for x in chunk_data])
             self.buffers[i] = self.buffers[i][self.patch_size:]
 
-        # [chunk_size, patch_size]
-        input_patches = torch.tensor(batch_bytes, dtype=torch.long)
-        return input_patches
+        # Token ID, Mask
+        input_patches = torch.tensor(batch_tokens, dtype=torch.long)
+        mask_patches = torch.tensor(batch_masks, dtype=torch.long)
+        return input_patches, mask_patches

@@ -1,23 +1,8 @@
-from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-from ouro_core import Ouro, ByteTokenizer
-    
-    
-@dataclass
-class Config:
-    embed_dim: int = 512
-    block_layers: int = 6
-    blocks: int = 2
-
-    patch_size: int = 512
-    chunk_size: int = 17
-    bptt_size: int = 9
-
-    # 预训练配置
-    pretrain_train_file: str = f'datasets/pretrain/pretrain_train.jsonl'
-    tokenizer: ByteTokenizer = ByteTokenizer()
+from ouro_core import Ouro
+from config import Config
     
 
 class Gridman(nn.Module):
