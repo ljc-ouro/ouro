@@ -11,7 +11,7 @@
 [![GitHub Code License](https://img.shields.io/github/license/ljc-ouro/ouro)](LICENSE)
 [![GitHub last commit](https://img.shields.io/github/last-commit/ljc-ouro/ouro)](https://github.com/ljc-ouro/ljc-ouro/commits/master)
 [![GitHub pull request](https://img.shields.io/badge/PRs-welcome-blue)](https://github.com/ljc-ouro/ouro/pulls)
-[![Collection](https://img.shields.io/badge/🤖-Gridman%20%20Collection-blue)](https://huggingface.co/collections/ljc-ouro/gridman)
+[![Collection](https://img.shields.io/badge/🤖-Gridman%20%20Collection-blue)](https://hf.co/collections/ljc-ouro/gridman)
 
 </div>
 
@@ -73,6 +73,8 @@
 <details> 
 <summary> <b>🔥 Ouro-Naxi</b> </summary>
 
+- 
+
 `Ouro` 架构 `v1` 版本命名为 `Naxi`, 源自中国地名纳溪, 取纳溪成川之意. 后统一用 `-Naxi` 指代 `v1` 架构版本及对应的 `Gridman` 模型版本.
 
 使用 `Ouro-Naxi` 架构训练的原生字节级语言模型 `Gridman` 模型列表:
@@ -91,16 +93,6 @@
 
 ---
 
-#### 📝 更新日志
-
-<details> 
-<summary> <b>🔥 2026-04-01</b> </summary>
-
-- 项目正式开源
-- 发布 `Ouro-Naxi` / `Gridman-Naxi`：结构、Tokenizer、训练链路、推理接口与默认配置全面更新
-- 结构图资源更新，README 大面积更新
-
-</details>
+# 📌 模型
 
 ---
-
