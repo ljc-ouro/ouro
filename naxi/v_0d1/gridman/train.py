@@ -124,12 +124,32 @@ def train_model(is_sft: bool = False):
                 grid_man_module.core_ouro.mem_sync()
 
                 if (targets != -100).any():
+                    batch_size, length = targets.shape
+
                     # 计算交叉熵损失
-                    loss = F.cross_entropy(
+                    base_loss = F.cross_entropy(
                         logits.reshape(-1, logits.size(-1)), 
                         targets.reshape(-1),
                         ignore_index=-100  # 忽略 -100 
                     )
+
+                    if is_sft:
+                        # 余弦衰减, 靠前损失权重越大, 强化记忆
+                        alpha = 1.618  
+                        positions = torch.arange(length, device=device, dtype=torch.float32)
+            
+                        weights_1d = 1.0 + alpha * (1.0 + torch.cos(torch.pi * positions / (length-1))) / 2.0
+                        weights_1d = weights_1d.to(logits.dtype)
+                        
+                        weights = weights_1d.unsqueeze(0).expand(batch_size, length).reshape(-1)
+                        
+                        valid_mask = (targets.reshape(-1) != -100)
+                        valid_weights = weights * valid_mask
+                        
+                        loss = (base_loss * valid_weights).sum() / (valid_weights.sum() + 1e-8)
+                    else:
+                        loss = base_loss
+
                 else: # 整个 patch -100 是 0 loss
                     loss = logits.sum() * 0.0
         
