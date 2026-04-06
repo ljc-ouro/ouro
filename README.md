@@ -254,10 +254,10 @@ $$
 $$
 \left\{
 \begin{aligned}
-&\lim_{t \to \infty} \|\nabla_\theta L(\theta_t)\| = 0 \\
-&\lim_{t \to \infty} \|L_2\| = 0 \\
+&\lim_{t \to \infty} |\nabla_\theta L(\theta_t)| = 0 \\
+&\lim_{t \to \infty} |L_2| = 0 \\
 &\lim_{t \to \infty} \theta_t = \theta' \\
-&\sup_t \|s_t\| < \infty \\
+&\sup_t |s_t| < \infty \\
 &G \in C^1(\Theta \times \mathcal{S})
 \end{aligned}
 \right.
