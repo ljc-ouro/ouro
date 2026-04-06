@@ -25,15 +25,15 @@
 
 </div>
 
-* 此开源项目旨在完全从 0 开始, 构建第一代带状态 AI 架构 `Ouro`, 并以全新字节级语言模型 `Gridman` 作为体验开端.
+{*} 此开源项目旨在完全从 0 开始, 构建第一代带状态 AI 架构 `Ouro`, 并以全新字节级语言模型 `Gridman` 作为体验开端.
 
-* 仅用 3 块钱成本与 2 小时训练时间，即可训练出规模约为 52M 全新架构的超小语言模型 `Gridman-Mini`.
-* `Gridman` 系列从极轻量模型到 B 级别模型全线覆盖，主线版本体积基本和 GPT-2 系列规模相当, Mini 版力求让普通个人 GPU 也能快速完成训练与复现.
-* 项目同时开源了完整训练链路，覆盖预训练 (Pretrain), 监督微调 (SFT) 等全过程代码.
-* 项目所有核心算法代码均从 0 使用 PyTorch 原生实现, 不依赖第三方库提供的高层抽象接口.
-* 这不仅是一个全新架构的大语言模型全阶段开源项目，也是一套面向 `Ouro` 入门与实践的教程.
-* 希望此项目能为更多人提供一个可复现, 可理解, 可扩展 `Ouro` 的起点, 一起感受状态 AI 模型的魅力, 并推动更广泛 AI 社区的进步, 为未来世界的变革做好准备.
-* 项目交流 QQ 群: 198302483. 答案: State.
+{*} 仅用 3 块钱成本与 2 小时训练时间，即可训练出规模约为 52M 全新架构的超小语言模型 `Gridman-Mini`.
+{*} `Gridman` 系列从极轻量模型到 B 级别模型全线覆盖，主线版本体积基本和 GPT-2 系列规模相当, Mini 版力求让普通个人 GPU 也能快速完成训练与复现.
+{*} 项目同时开源了完整训练链路，覆盖预训练 (Pretrain), 监督微调 (SFT) 等全过程代码.
+{*} 项目所有核心算法代码均从 0 使用 PyTorch 原生实现, 不依赖第三方库提供的高层抽象接口.
+{*} 这不仅是一个全新架构的大语言模型全阶段开源项目，也是一套面向 `Ouro` 入门与实践的教程.
+{*} 希望此项目能为更多人提供一个可复现, 可理解, 可扩展 `Ouro` 的起点, 一起感受状态 AI 模型的魅力, 并推动更广泛 AI 社区的进步, 为未来世界的变革做好准备.
+{*} 项目交流 QQ 群: 198302483. 答案: State.
 
 > 注：本项目基于 Apache 2.0 协议开源; "2小时" 基于 NVIDIA 3090 硬件设备 (单卡) 预估."3块钱" 指 GPU 服务器租用成本, 具体规格详情见下文.
 
@@ -94,7 +94,7 @@
 
 相反, State 是模型的核心主体. 
 
-这正是 `Ouro` 构建的核心哲学: **State is all you need**.
+这正是 `Ouro` 构建的核心哲学: {*}{*}State is all you need{*}{*}.
 
 😊 一起感受状态模型的乐趣吧！
 
@@ -186,15 +186,15 @@ $$s_{t+1}, y = F(s_t, x, G(\theta, s_t))$$
 
 我们通过反向传播来更新权重, 即更新 $G(\theta, s_t)$. 那么在一次反向传播后权重变为 $G(\theta + \mathrm{d}\theta, s_t + \mathrm{d}s)$. 当模型收敛时展开这个式子得到
 
-$$G(\theta + \mathrm{d}\theta, s_t + \mathrm{d}s)=G(\theta^*, s_t)+\frac{\partial G}{\partial s}(\theta^*, s_t)\mathrm{d}s$$
+$$G(\theta + \mathrm{d}\theta, s_t + \mathrm{d}s)=G(\theta^{*}, s_t)+\frac{\partial G}{\partial s}(\theta^{*}, s_t)\mathrm{d}s$$
 
 由于等效原理和递推方程我们自然的要求 $s_{t+1} = s_t + \mathrm{d}s$, 带入得到
 
-$$G(\theta^*, s_{t+1}) + s_t\frac{\partial G}{\partial s}(\theta^*, s_t)=G(\theta^*, s_t)+ s_{t+1}\frac{\partial G}{\partial s}(\theta^*, s_t)$$
+$$G(\theta^{*}, s_{t+1}) + s_t\frac{\partial G}{\partial s}(\theta^{*}, s_t)=G(\theta^{*}, s_t)+ s_{t+1}\frac{\partial G}{\partial s}(\theta^{*}, s_t)$$
 
-令 $J_{t}=\frac{\partial G}{\partial s}(\theta^*, s_t)$, 重写为
+令 $J_{t}=\frac{\partial G}{\partial s}(\theta^{*}, s_t)$, 重写为
 
-$$G(\theta^*, s_{t+1})-G(\theta^*, s_{t})=J_t (s_{t+1} - s_{t})$$
+$$G(\theta^{*}, s_{t+1})-G(\theta^{*}, s_{t})=J_t (s_{t+1} - s_{t})$$
 
 实际上这就是我们需要的约束!
 
@@ -214,7 +214,7 @@ $$
 Ouro 型状态转移方程定义为：
 $$
 (s_{t+1}, y_t) = F\big(s_t, x_t, G(\theta, s_t)\big), 
-\quad (x_t, y_t^*) \sim \mathcal{D}
+\quad (x_t, y_t^{*}) \sim \mathcal{D}
 $$
 
 定义总损失：
@@ -225,15 +225,15 @@ $L_1$ 任务损失
 
 $$
 L_1(\theta)
-= \mathbb{E}_{(x,y^*) \sim \mathcal{D}}
-\big[ \ell(y_t, y^*) \big]
+= \mathbb{E}_{(x,y^{*}) \sim \mathcal{D}}
+\big[ \ell(y_t, y^{*}) \big]
 $$
 
 $L_2$ 状态约束损失
 
 $$
 L_2(\theta)
-= \mathbb{E}_{(x_t,y_t^*) \sim \mathcal{D}}
+= \mathbb{E}_{(x_t,y_t^{*}) \sim \mathcal{D}}
 \left[
 \left\|
 G(\theta, s_{t+1}) - G(\theta, s_t)
@@ -256,14 +256,14 @@ $$
 \begin{aligned}
 &\lim_{t \to \infty} \|\nabla_\theta L(\theta_t)\| = 0 \\
 &\lim_{t \to \infty} \|L_2\| = 0 \\
-&\lim_{t \to \infty} \theta_t = \theta^* \\
+&\lim_{t \to \infty} \theta_t = \theta^{*} \\
 &\sup_t \|s_t\| < \infty \\
 &G \in C^1(\Theta \times \mathcal{S})
 \end{aligned}
 \right.
 $$
 
-则称 $F$ 在 $\mathcal{D}$ 上是 **Ouro 完备的**.
+则称 $F$ 在 $\mathcal{D}$ 上是 {*}{*}Ouro 完备的{*}{*}.
 
 #### 💡 AGI
 
