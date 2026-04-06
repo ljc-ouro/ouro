@@ -41,42 +41,21 @@
 
 # 📌 架构优势
 
-<table style="width: 100%; border-collapse: separate; border-spacing: 12px; background: transparent; border: none; table-layout: fixed;">
-  <tr>
-    <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
-      <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">⚙️ Theory</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">理论完备</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Ouro complete</div>
-    </td>
-    <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
-      <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">⚡ Speed</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">恒定速度</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Constant generation speed</div>
-    </td>
-    <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
-      <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">💾 VRAM</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">恒定显存</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Constant VRAM</div>
-    </td>
-  </tr>
-  <tr>
-    <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
-      <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">📦 No Cache</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">无需 KV Cache</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Without KV Cache</div>
-    </td>
-    <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
-      <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">✨ Learning</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">持续学习</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Continual learning</div>
-    </td>
-    <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
-      <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">∞ Context</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">无限上下文</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Infinite ctxlen</div>
-    </td>
-  </tr>
-</table>
+<div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; max-width: 900px; margin: 0 auto;">
+
+  <div style="flex: 1 1 calc(33.333% - 20px); min-width: 260px; background: linear-gradient(145deg,#1a1a1a,#111); border-radius:16px; padding:22px; color:#fff; border:1px solid rgba(255,255,255,0.06); box-shadow:0 6px 20px rgba(0,0,0,0.4); box-sizing: border-box;">
+    <div style="opacity:.7;font-size:13px;margin-bottom:10px;">⚙️ Parallel</div>
+    <div style="font-size:20px;font-weight:600;margin-bottom:6px;">超高并发</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);">Massive Parallelization</div>
+  </div>
+  
+  <div style="flex: 1 1 calc(33.333% - 20px); min-width: 260px; background: linear-gradient(145deg,#1a1a1a,#111); border-radius:16px; padding:22px; color:#fff; border:1px solid rgba(255,255,255,0.06); box-shadow:0 6px 20px rgba(0,0,0,0.4); box-sizing: border-box;">
+    <div style="opacity:.7;font-size:13px;margin-bottom:10px;">⚡ Speed</div>
+    <div style="font-size:20px;font-weight:600;margin-bottom:6px;">恒定速度</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);">Constant generation speed</div>
+  </div>
+
+  </div>
 
 ---
 
