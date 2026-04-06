@@ -252,7 +252,7 @@ $$
 并满足：
 
 $$
-\left\{
+\left\\{
 \begin{aligned}
 &\lim_{t \to \infty} |\nabla_\theta L(\theta_t)| = 0 \\
 &\lim_{t \to \infty} |L_2| = 0 \\
