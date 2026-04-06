@@ -207,11 +207,13 @@ $$\mathrm{d}G=J\mathrm{d}s$$
 #### 💡 Ouro 完备
 
 设数据域：
+
 $$
 \mathcal{D} \subseteq \mathcal{X} \times \mathcal{Y}
 $$
 
 Ouro 型状态转移方程定义为：
+
 $$
 (s_{t+1}, y_t) = F\big(s_t, x_t, G(\theta, s_t)\big), 
 \quad (x_t, y_t') \sim \mathcal{D}
