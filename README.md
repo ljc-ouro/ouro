@@ -170,9 +170,9 @@ $$s_{t+1}, y = f(s_t, x)$$
 
 我们重写标准的状态转移方程
 
-$$s_{t+1}, y = F(s_t, x, G(\theta, s_t))$$
+$$s_{t+1}, y = F(s_t, x, W(\theta, s_t))$$
 
-称之为 Ouro 型状态转移方程, $F$ 由 $\theta, s_t$ 确定的权重 $G(\theta, s_t)$ 唯一决定. 现在距离我们得出最终的状态约束只有一步之遥了.
+称之为 Ouro 型状态转移方程, $F$ 由 $\theta, s_t$ 确定的权重 $W(\theta, s_t)$ 唯一决定. 现在距离我们得出最终的状态约束只有一步之遥了.
 
 #### 💡 等效原理
 
@@ -180,27 +180,27 @@ $$s_{t+1}, y = F(s_t, x, G(\theta, s_t))$$
 
 - 推理: $s_t$ 的改变
 
-- 学习: $G(\theta, s_t)$ 的改变
+- 学习: $W(\theta, s_t)$ 的改变
 
 基于等效原理, 在这里做一些简单的推导.
 
-我们通过反向传播来更新权重, 即更新 $G(\theta, s_t)$. 那么在一次反向传播后权重变为 $G(\theta + \mathrm{d}\theta, s_t + \mathrm{d}s)$. 当模型收敛时展开这个式子得到
+我们通过反向传播来更新权重, 即更新 $W(\theta, s_t)$. 那么在一次反向传播后权重变为 $W(\theta + \mathrm{d}\theta, s_t + \mathrm{d}s)$. 当模型收敛时展开这个式子得到
 
-$$G(\theta + \mathrm{d}\theta, s_t + \mathrm{d}s)=G(\theta', s_t)+\frac{\partial G}{\partial s}(\theta', s_t)\mathrm{d}s$$
+$$W(\theta + \mathrm{d}\theta, s_t + \mathrm{d}s)=W(\theta', s_t)+\frac{\partial G}{\partial s}(\theta', s_t)\mathrm{d}s$$
 
 由于等效原理和递推方程我们自然的要求 $s_{t+1} = s_t + \mathrm{d}s$, 带入得到
 
-$$G(\theta', s_{t+1}) + s_t\frac{\partial G}{\partial s}(\theta', s_t)=G(\theta', s_t)+ s_{t+1}\frac{\partial G}{\partial s}(\theta', s_t)$$
+$$W(\theta', s_{t+1}) + s_t\frac{\partial G}{\partial s}(\theta', s_t)=W(\theta', s_t)+ s_{t+1}\frac{\partial G}{\partial s}(\theta', s_t)$$
 
 令 $J_{t}=\frac{\partial G}{\partial s}(\theta', s_t)$, 重写为
 
-$$G(\theta', s_{t+1})-G(\theta', s_{t})=J_t (s_{t+1} - s_{t})$$
+$$W(\theta', s_{t+1})-W(\theta', s_{t})=J_t (s_{t+1} - s_{t})$$
 
 实际上这就是我们需要的约束!
 
 也可以直接写作连续形式
 
-$$\mathrm{d}G=J\mathrm{d}s$$
+$$\mathrm{d}W=J\mathrm{d}s$$
 
 这告诉我们学习-推理的局部不可区分性本质上来自于链式法则.
 
@@ -215,7 +215,7 @@ $$
 Ouro 型状态转移方程定义为：
 
 $$
-(s_{t+1}, y_t) = F\big(s_t, x_t, G(\theta, s_t)\big), 
+(s_{t+1}, y_t) = F\biW(s_t, x_t, W(\theta, s_t)\big), 
 \quad (x_t, y_t') \sim \mathcal{D}
 $$
 
@@ -238,7 +238,7 @@ L_2(\theta)
 = \mathbb{E}_{(x_t,y_t') \sim \mathcal{D}}
 \left[
 \left\|
-G(\theta, s_{t+1}) - G(\theta, s_t)- J_t (s_{t+1} - s_t)
+W(\theta, s_{t+1}) - W(\theta, s_t)- J_t (s_{t+1} - s_t)
 \right\|^2
 \right]
 $$
