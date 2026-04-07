@@ -215,7 +215,7 @@ $$
 Ouro 型状态转移方程定义为：
 
 $$
-(s_{t+1}, y_t) = F\biW(s_t, x_t, W(\theta, s_t)\big), 
+(s_{t+1}, y_t) = F(s_t, x_t, W(\theta, s_t)\big), 
 \quad (x_t, y_t') \sim \mathcal{D}
 $$
 
