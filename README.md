@@ -238,8 +238,7 @@ L_2(\theta)
 = \mathbb{E}_{(x_t,y_t') \sim \mathcal{D}}
 \left[
 \left\|
-G(\theta, s_{t+1}) - G(\theta, s_t)
-- J_t (s_{t+1} - s_t)
+G(\theta, s_{t+1}) - G(\theta, s_t)- J_t (s_{t+1} - s_t)
 \right\|^2
 \right]
 $$
