@@ -317,6 +317,12 @@ $$
 
 ## 🫶支持者
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date&theme=dark"/>
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
+</picture>
+
 <a href="https://github.com/ljc-ouro/ouro/stargazers">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://reporoster.com/stars/dark/ljc-ouro/ouro"/>
@@ -333,11 +339,7 @@ $$
     </picture>
 </a>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date&theme=dark"/>
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
-</picture>
+---
 
 # ⚖️ 开源协议
 
