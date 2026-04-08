@@ -283,4 +283,63 @@ $$
 
 # 📌 模型
 
+## 🚀 核心组件
+
+## 🚀 全局架构
+
 ---
+
+# 📌 训练
+
+## 🛠️ 数据集
+
+## 🛠️ 预训练 (Pretrain)
+
+## 🛠️ 微调 (SFT)
+
+---
+
+# 🎓 引用
+
+如果 `Ouro` 对您的研究或工作有所帮助，欢迎引用：
+
+```bibtex
+@misc{Ouro,
+  title = {Ouro: The Next-Gen AI Architecture},
+  author = {Jinchang Liu},
+  year = {2025},
+  url = {https://github.com/ljc-ouro/ouro},
+  note = {GitHub repository, accessed 2026}
+}
+```
+
+---
+
+## 🫶支持者
+
+<a href="https://github.com/ljc-ouro/ouro/stargazers">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://reporoster.com/stars/dark/ljc-ouro/ouro"/>
+      <source media="(prefers-color-scheme: light)" srcset="https://reporoster.com/stars/ljc-ouro/ouro"/>
+      <img alt="Star poster" src="https://reporoster.com/stars/ljc-ouro/ouro"/>
+    </picture>
+</a>
+
+<a href="https://github.com/ljc-ouro/ouro/network/members">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://reporoster.com/forks/dark/ljc-ouro/ouro"/>
+      <source media="(prefers-color-scheme: light)" srcset="https://reporoster.com/forks/ljc-ouro/ouro"/>
+      <img alt="Fork poster" src="https://reporoster.com/forks/ljc-ouro/ouro"/>
+    </picture>
+</a>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date&theme=dark"/>
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
+</picture>
+
+# ⚖️ 开源协议
+
+本项目采用 [Apache License 2.0](LICENSE) 开源协议。
+
