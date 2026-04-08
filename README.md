@@ -360,7 +360,7 @@ Dyn-Linear1 -> SiLU -> Linear2
 Mem-Linear -> Linear1 -> SiLU -> Linear2
 ```
 
-只是这里 `Mem` 的权重 (参数) 不被反向传播更新, 而是采取了 DeltaRule 作为主动的前向更新策略.
+只是这里 `Mem` 的权重 (参数) 不被反向传播更新, 而是采取了 `DeltaRule` 作为主动的前向更新策略.
 
 除了输入数据节点流的改变, `Dyn-FFN` 同时返回局部产生的线性注意力打分 `scores`
 
@@ -369,6 +369,18 @@ $$\text{y, scores} = \text{Dyn-FFN(x)}$$
 为 `OuroBlock` 中 **涌现注意力 (Emergent Attention)** 的产生做铺垫.
 
 #### Ⅱ 涌现注意力 (Emergent Attention)
+
+涌现注意力的核心思想可以简单的阐述为标准注意力可以被线性注意力及其残差逼近
+
+$$\text{Attn}=\text{LinearAttn}+\Delta\text{LinearAttn}$$
+
+特别的, `Ouro` 中的线性注意力产生于记忆更新的 `DeltaRule` 计算过程中.
+
+在宏观上来看, `OuroBlock` 层级的注意力就是记忆被唤醒时产生的注意力之"和".
+
+## 🚀 Ouro 结构示意图
+
+![structure](./images/ouro_struct.png)
 
 ---
 
