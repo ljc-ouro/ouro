@@ -293,25 +293,35 @@ $$
 
 - OuroLayer 类: `Ouro` 最底层结构, 在指定索引处开启动态前馈层 (Dynamic-FFN).
 
-```
-Ouro: 
+```python
+class Ouro:
+""" 
 Pre-Nonm
 OuroBlocks
 注意力残差
 FFN
 残差输出
+"""
+...
 
 
-OuroBlock: 
+class OuroBlock: 
+"""
 OuroLayers
 涌现注意力 
 注意力门控
 残差输出
+"""
+...
 
-OuroLayer:
+
+class OuroLayer:
+"""
 前缀注意力
 动态前馈层
 残差输出
+"""
+...
 ```
 与目前主流演进方向不同, `Ouro` 并未拥抱所谓 $O(n)$ 的线性注意力 (严格来说是 $O(n d^2)$), 而是全面拥抱 $O(n^2d)$ 复杂度的结构. 即使内部使用了线性注意力, 其实现也也选择了 $O(n^2d)$ 的形式.
 
