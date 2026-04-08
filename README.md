@@ -343,5 +343,5 @@ $$
 
 # ⚖️ 开源协议
 
-本项目采用 [Apache License 2.0](LICENSE) 开源协议。
+本项目采用 [Apache License 2.0](LICENSE) 开源协议.
 
