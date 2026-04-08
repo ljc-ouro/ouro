@@ -386,7 +386,27 @@ $$\text{Attn}=\text{LinearAttn}+\Delta\text{LinearAttn}$$
 
 # 📌 训练
 
+`Ouro` 是通用架构, 以 `Ouro` 作为核心设计的语言模型称为 `Gridman`. 本章节所指的训练均指 `Gridman` 模型的训练.  
+
 ## 🛠️ 数据集
+
+#### Ⅰ  Tokenizer
+
+得益于 `Ouro` 架构的强大, `Gridman` 的实现直接选择了使用纯字节级别的分词器 `ByteTokenizer`. 这也意味着 `Gridman` 是一个原生字节级别的语言模型, 无需进行任何传统意义上的分词即可训练!
+
+从根源上消除了多语言训练困难或 oov 等因分词带来的干扰.
+
+#### Ⅱ 预训练 (Pretrain) 数据集
+
+预训练数据集来自 [Minimind 数据集](https://www.modelscope.cn/datasets/gongjy/minimind_dataset) 中的 `pretrain_t2t.jsonl` 数据集加上开源中文 `wiki` 数据的乱序混合得到, 标记为 `pretrain.jsonl` 数据集. 数据集下载链接见下方.
+
+#### Ⅲ 微调 (SFT) 数据集
+
+微调数据集来自 [Minimind 数据集](https://www.modelscope.cn/datasets/gongjy/minimind_dataset) 中的 `sft_t2t.jsonl` 数据集. 本项目未对该数据集进行任何处理, 为了方便与统一. 将该数据集重新标记为 `sft.jsonl`, 数据集下载链接见下方.
+
+#### Ⅳ 数据加载
+
+> `Gridman` 训练数据集下载地址：[ModelScope]() | [HuggingFace]()
 
 ## 🛠️ 预训练 (Pretrain)
 
