@@ -283,9 +283,82 @@ $$
 
 # 📌 模型
 
+## 🚀 全局架构
+
+`Ouro` 并未采用传统的层堆叠架构, 而是通过类树形结构组织起来.
+
+- Ouro 类: 主类, 全局唯一, 为 OuroBlock 类的堆叠. OuroBlock 类之间使用注意力残差 (AttnRes) 连接.
+
+- OuroBlock 类: 为 OuroLayer 类的堆叠. OuroLayer 类之间使用涌现注意力 (Emergent Attention) 连接.
+
+- OuroLayer 类: `Ouro` 最底层结构, 在指定索引处开启动态前馈层 (Dynamic-FFN).
+
+```
+Ouro: 
+Pre-Nonm
+OuroBlocks
+注意力残差
+FFN
+残差输出
+
+
+OuroBlock: 
+OuroLayers
+涌现注意力 
+注意力门控
+残差输出
+
+OuroLayer:
+前缀注意力
+动态前馈层
+残差输出
+```
+与目前主流演进方向不同, `Ouro` 并未拥抱所谓 $O(n)$ 的线性注意力 (严格来说是 $O(nd^2)$), 而是全面拥抱 $O(n^2d)$ 复杂度的结构. 即使内部使用了线性注意力, 其实现也也选择了 $O(n^2d)$ 的形式.
+
+这也使得 `Ouro` 在其输入窗口内拥有严格强于 `Transformer` 的表达能力. 同时得益于 `Dyn-FFN` 组件的设计, `Ouro` 在推理时依然能享受到 $O(1)$ 恒定显存和算力需求的福利并实现完全的持续学习.
+
 ## 🚀 核心组件
 
-## 🚀 全局架构
+#### Ⅰ 动态前馈层 (Dynamic-FFN)
+
+**动态前馈层 (Dynamic-FFN, Dyn-FFN)** 是整个 `Ouro` 架构的灵魂. 传统的 `FFN` 可以表示为
+
+```
+Linear1 [InDim, OutDim] -> SiLU [OutDim] -> Linear2 [OutDim, InDim]
+```
+
+为了将 `FFN` 改成输入响应和记忆响应的, 我们将 `Linear1` 视作一个
+
+$$\text{InDim} \times \text{OutDim}$$
+
+的矩阵. 注意到
+
+$$\text{InDim} \times \text{InDim} \times \text{InDim} \times \text{OutDim}$$
+
+依然是一个 `[InDim, OutDim]` 形状的矩阵, 于是我们自然的引入一个 `[InDim, InDim]` 形状的方阵作为记忆矩阵.
+
+此时数据流变为
+
+
+```
+Dyn-Linear1 -> SiLU -> Linear2
+```
+
+或者等价的
+
+```
+Mem-Linear -> Linear1 -> SiLU -> Linear2
+```
+
+只是这里 `Mem` 的权重 (参数) 不被反向传播更新, 而是采取了 DeltaRule 作为主动的前向更新策略.
+
+除了输入数据节点流的改变, `Dyn-FFN` 同时返回局部产生的线性注意力打分 `scores`
+
+$$\text{y, scores} = \text{Dyn-FFN(x)}$$
+
+为 `OuroBlock` 中 **涌现注意力 (Emergent Attention)** 的产生做铺垫.
+
+#### Ⅱ 涌现注意力 (Emergent Attention)
 
 ---
 
@@ -344,4 +417,3 @@ $$
 # ⚖️ 开源协议
 
 本项目采用 [Apache License 2.0](LICENSE) 开源协议.
-
