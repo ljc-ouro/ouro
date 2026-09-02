@@ -13,20 +13,12 @@
 
 <div align="center">
 
-<<<<<<< HEAD
-![visitors](https://visitor-badge.laobi.icu/badge?page_id=zhihumomo/ouro)
-[![GitHub Repo stars](https://img.shields.io/github/stars/zhihumomo/ouro?style=social)](https://github.com/zhihumomo/ouro/stargazers)
-[![GitHub Code License](https://img.shields.io/github/license/zhihumomo/ouro)](LICENSE)
-[![GitHub last commit](https://img.shields.io/github/last-commit/zhihumomo/ouro)](https://github.com/zhihumomo/ouro/commits)
-[![GitHub pull request](https://img.shields.io/badge/PRs-welcome-blue)](https://github.com/zhihumomo/ouro/pulls)
-=======
 ![visitors](https://visitor-badge.laobi.icu/badge?page_id=ljc-ouro/ouro)
 [![GitHub Repo stars](https://img.shields.io/github/stars/ljc-ouro/ouro?style=social)](https://github.com/ljc-ouro/ljc-ouro/stargazers)
 [![GitHub Code License](https://img.shields.io/github/license/ljc-ouro/ouro)](LICENSE)
 [![GitHub last commit](https://img.shields.io/github/last-commit/ljc-ouro/ouro)](https://github.com/ljc-ouro/ljc-ouro/commits/master)
 [![GitHub pull request](https://img.shields.io/badge/PRs-welcome-blue)](https://github.com/ljc-ouro/ouro/pulls)
 [![Collection](https://img.shields.io/badge/🤖-Gridman%20%20Collection-blue)](https://hf.co/collections/maphy-ouro/gridman)
->>>>>>> 1a65e1b6ceca7f677defec2e0e2b7a30519ea8ad
 
 </div>
 
