@@ -1,63 +1,15 @@
 import os
-import math
-import uuid
-from contextlib import nullcontext
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-
 import torch
 import torch.nn.functional as F
+from contextlib import nullcontext
+from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import get_cosine_schedule_with_warmup
-from torch.optim.lr_scheduler import LambdaLR
-
-from naxi.v_0d1.gridman.config import RUNNING_CONFIG
-from naxi.v_0d1.gridman.core import Gridman
-from naxi.v_0d1.gridman.dataloader import StreamLoader
-from naxi.v_0d1.gridman.tools import (
-    CheckpointStage,
-    load_checkpoint,
-    print_model_parameters,
-    restore_rng_state,
-    save_checkpoint,
-)
-
+from naxi.v_0d2.gridman.config import RUNNING_CONFIG
+from naxi.v_0d2.gridman.core import Gridman
+from naxi.v_0d2.gridman.dataloader import StreamLoader
+from naxi.v_0d2.gridman.tools import save_checkpoint, load_checkpoint, print_model_parameters
 from torch.utils.tensorboard import SummaryWriter
-
-
-def get_gaussian_schedule_with_warmup(
-    optimizer: torch.optim.Optimizer, 
-    num_warmup_steps: int, 
-    num_training_steps: int, 
-    k: float = 17.0, 
-    last_epoch: int = -1
-):
-    """
-    高斯退火公式: e^(-kx^2) + e^(-k)*((2k+2)x^3 - (2k+3)x^2)
-    """
-    def lr_lambda(current_step: int):
-        # 1. Warmup 阶段：线性增加到 1.0
-        if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1, num_warmup_steps))
-        
-        # 2. 衰减阶段：计算相对进度 x (0.0 到 1.0)
-        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
-        
-        # 限制在 [0, 1] 之间，防止越界
-        x = min(max(progress, 0.0), 1.0)
-        
-        # 如果已经结束训练，学习率归零
-        if x >= 1.0:
-            return 0.0
-        
-        # 3. 高斯退火公式计算衰减系数
-        # term1 = 1/(k*x+1) - x/(k+1)
-        # term2 = (2*k+1)/(k+1)**2 * (x**2-x)
-        term1 = math.exp(-k * (x ** 2))
-        term2 = math.exp(-k) * ((2 * k + 2) * (x ** 3) - (2 * k + 3) * (x ** 2))
-        
-        return term1 + term2
-
-    return LambdaLR(optimizer, lr_lambda, last_epoch)
 
 
 def reduce_value(value: torch.Tensor):
@@ -70,21 +22,9 @@ def reduce_value(value: torch.Tensor):
     return val / dist.get_world_size()
 
 
-def train_model(
-    stage: CheckpointStage = "pretrain",
-    grad_accum_steps: int = 1,
-    resume: bool = False,
-):
-    if stage not in {"pretrain", "sft", "post_train"}:
-        raise ValueError(f"Unsupported training stage: {stage}")
-    if stage == "post_train":
-        raise NotImplementedError(
-            "post_train has checkpoint semantics but no dataset/training loop yet"
-        )
-    is_sft = stage == "sft"
+def train_model(is_sft: bool = False, grad_accum_steps: int = 1):
     config = RUNNING_CONFIG
     dtype = config.dtype
-
     # 初始化多卡环境
     dist.init_process_group(backend='nccl')
     local_rank = int(os.environ.get('LOCAL_RANK', 0))
@@ -94,7 +34,7 @@ def train_model(
 
     chunk_size = config.chunk_size
     bptt_size = config.bptt_size
-    
+
     if is_sft:
         mode_name = 'SFT'
         model_name = f'{config.name}_sft'
@@ -118,6 +58,7 @@ def train_model(
     )
 
     grid_man = Gridman(config).to(device)
+    raw_grid_man = grid_man  # 保留未编译的原始模块引用, 供加载权重使用
     writer = None
 
     if local_rank == 0:
@@ -128,18 +69,6 @@ def train_model(
         log_dir = os.path.join('log', model_name)
         writer = SummaryWriter(log_dir=log_dir)
         print(f'📊 TensorBoard 日志将保存至: {log_dir}')
-
-    checkpoint_metadata = None
-    if resume or is_sft:
-        # A new SFT run starts from the compatible pretrain state. Resuming a
-        # run loads the checkpoint of the same stage. Neither path resets state.
-        source_stage: CheckpointStage = stage if resume else "pretrain"
-        checkpoint_metadata = load_checkpoint(
-            grid_man,
-            stage=source_stage,
-            config=config,
-            need_print=(local_rank == 0),
-        )
 
     grid_man = torch.compile(grid_man)
     # 此处为强制类型标记
@@ -158,36 +87,27 @@ def train_model(
         num_training_steps=total_update_steps
     )
 
-    if resume and checkpoint_metadata is not None:
-        if checkpoint_metadata.get("optimizer_state_dict") is not None:
-            optimizer.load_state_dict(checkpoint_metadata["optimizer_state_dict"])
-        if checkpoint_metadata.get("scheduler_state_dict") is not None:
-            scheduler.load_state_dict(checkpoint_metadata["scheduler_state_dict"])
-        restore_rng_state(checkpoint_metadata.get("rng_state"))
-
-    lineage_id = (
-        checkpoint_metadata.get("lineage_id")
-        if checkpoint_metadata is not None
-        else None
-    ) or str(uuid.uuid4())
-    parent_checkpoint_id = (
-        checkpoint_metadata.get("checkpoint_id")
-        if checkpoint_metadata is not None
-        else None
+    # ================= 断点重训 =================
+    # 本阶段检查点存在 -> 完整恢复 模型/优化器/调度器/RNG/数据流, 返回已训练 step
+    # is_sft=True 且无 SFT 检查点 -> 自动回退加载 pretrain 权重, 返回 0
+    # 无检查点 -> 返回 0, 从头训练
+    start_step = load_checkpoint(
+        raw_grid_man, is_sft,
+        need_print=(local_rank == 0),
+        optimizer=optimizer,
+        scheduler=scheduler,
+        dataloader=dataloader,
     )
+    dist.barrier()  # 确保各 rank 状态一致后再开训
 
     loss_acc = torch.tensor(0.0, device=device)
     loss_acc_log = torch.tensor(0.0, device=device)
 
     optimizer.zero_grad()
 
-    initial_step = (
-        int(checkpoint_metadata.get("global_step", 0))
-        if resume and checkpoint_metadata is not None
-        else 0
-    )
+    save_every = 3600
 
-    for step in range(initial_step, steps):
+    for step in range(start_step, steps): 
         grid_man.train()
         step_true = step + 1
         
@@ -223,7 +143,7 @@ def train_model(
                 else: 
                     loss = logits.sum() * 0.0
             
-            loss_acc = loss_acc + loss
+                loss_acc = loss_acc + loss
 
             with torch.no_grad():
                 dist_loss = reduce_value(loss)
@@ -252,48 +172,29 @@ def train_model(
 
             loss_acc_log = torch.tensor(0.0, device=device)
 
-        if step_true % 3600 == 0 and local_rank == 0:
-            saved = save_checkpoint(
-                grid_man_module,
-                stage=stage,
-                config=config,
+        if step_true % save_every == 0:
+            # 所有 rank 都必须进入(内部要收集各 rank 的 RNG/数据流状态), 仅 rank0 写盘
+            save_checkpoint(
+                grid_man_module, is_sft,
                 optimizer=optimizer,
                 scheduler=scheduler,
-                global_step=step_true,
-                lineage_id=lineage_id,
-                parent_checkpoint_id=parent_checkpoint_id,
+                step=step_true,
+                dataloader=dataloader,
             )
-            parent_checkpoint_id = saved["checkpoint_id"]
+            dist.barrier()  # 等 rank0 写完, 避免其他 rank 超前进入下一个集合通信
 
-
-def generate_test(stage: CheckpointStage = "pretrain"):
-    """仅进行生成测试"""
-    config = RUNNING_CONFIG
-    device = config.device
-    tokenizer = config.tokenizer
-    dtype = config.dtype
-
-    grid_man = Gridman(config).to(device)
-    load_checkpoint(
-        grid_man,
-        stage=stage,
-        config=config,
+    # ================= 训练结束: 保存最终检查点 =================
+    save_checkpoint(
+        grid_man_module, is_sft,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        step=steps,
+        dataloader=dataloader,
     )
-    grid_man.eval()
-    if stage == "sft":
-        prompt_ids_list = (
-            [tokenizer.eos_token_id, tokenizer.user_token_id] + 
-            tokenizer.encode('你是谁') + 
-            [tokenizer.eos_token_id, tokenizer.assistant_token_id]
-        )
-    else:
-        prompt_ids_list = tokenizer.encode('世界上最高的山是')
+    dist.barrier()
 
-    prompt_ids = torch.tensor([[tokenizer.eos_token_id] + prompt_ids_list], dtype=torch.long, device=device)
-    
-    with torch.amp.autocast(config.device_type, dtype=dtype):
-        generated_ids = grid_man.generate(prompt_ids)
-    
-    generated_text = tokenizer.decode(generated_ids[0].tolist())
-    print(f'Gridman 🤖: {generated_text}')
-    print('-' * 65)
+    if local_rank == 0:
+        writer.close()
+        print(f'✅ {mode_name} 训练完成, 最终检查点已保存')
+
+    dist.destroy_process_group()

@@ -1,6 +1,8 @@
-from naxi.v_0d1.gridman.config import RUNNING_CONFIG, Config
-from naxi.v_0d1.gridman.core import Gridman
-from naxi.v_0d1.gridman.tools import load_checkpoint
+import torch
+
+from naxi.v_0d2.gridman.config import RUNNING_CONFIG, Config
+from naxi.v_0d2.gridman.core import Gridman
+from naxi.v_0d2.gridman.tools import load_checkpoint
 
 
 import torch
@@ -68,7 +70,7 @@ class GridmanChat:
 
         # 自回归生成
         for _ in range(max_len):
-            # 核心修复：决定采样来源
+            # 决定采样来源
             if len(self.current_patch) > 0:
                 # 还有上下文，正常前向推理（不固化记忆）
                 p_tensor = torch.tensor([self.current_patch], dtype=torch.long, device=self.device)
@@ -133,11 +135,11 @@ def gridman_chat(is_sft: bool = True):
 
     # 加载模型
     grid_man = Gridman(config).to(device)
-    load_checkpoint(
-        grid_man,
-        stage="sft" if is_sft else "pretrain",
-        config=config,
-    )
+    load_checkpoint(grid_man, is_sft)
+
+    torch.manual_seed(torch.seed())
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(torch.seed())
     
     # 实例化对话系统
     chat_bot = GridmanChat(grid_man, is_sft, config)

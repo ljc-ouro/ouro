@@ -1,17 +1,23 @@
 <div align="center">
 
-![logo](./images/logo.png)
+<picture>
+  <source
+    media="(prefers-color-scheme: dark)"
+    srcset="./website/assets/ouro/ouro-lockup-tagline-light.svg">
+  <img
+    src="./website/assets/ouro/ouro-lockup-tagline-ink.svg"
+    alt="Ouro — State is all you need">
+</picture>
 
 </div>
 
 <div align="center">
 
-![visitors](https://visitor-badge.laobi.icu/badge?page_id=ljc-ouro/ouro)
-[![GitHub Repo stars](https://img.shields.io/github/stars/ljc-ouro/ouro?style=social)](https://github.com/ljc-ouro/ljc-ouro/stargazers)
-[![GitHub Code License](https://img.shields.io/github/license/ljc-ouro/ouro)](LICENSE)
-[![GitHub last commit](https://img.shields.io/github/last-commit/ljc-ouro/ouro)](https://github.com/ljc-ouro/ljc-ouro/commits/master)
-[![GitHub pull request](https://img.shields.io/badge/PRs-welcome-blue)](https://github.com/ljc-ouro/ouro/pulls)
-[![Collection](https://img.shields.io/badge/🤖-Gridman%20%20Collection-blue)](https://hf.co/collections/ljc-ouro/gridman)
+![visitors](https://visitor-badge.laobi.icu/badge?page_id=zhihumomo/ouro)
+[![GitHub Repo stars](https://img.shields.io/github/stars/zhihumomo/ouro?style=social)](https://github.com/zhihumomo/ouro/stargazers)
+[![GitHub Code License](https://img.shields.io/github/license/zhihumomo/ouro)](LICENSE)
+[![GitHub last commit](https://img.shields.io/github/last-commit/zhihumomo/ouro)](https://github.com/zhihumomo/ouro/commits)
+[![GitHub pull request](https://img.shields.io/badge/PRs-welcome-blue)](https://github.com/zhihumomo/ouro/pulls)
 
 </div>
 
@@ -25,16 +31,24 @@
 
 </div>
 
-* 此开源项目旨在完全从 0 开始, 构建第一代带状态 AI 架构 `Ouro`, 并以全新字节级语言模型 `Gridman` 作为体验开端.
-* 仅用几十块钱成本与若干小时训练时间，即可训练出规模约为 52M 全新架构的超小语言模型 `Gridman-Mini`.
-* `Gridman` 系列从极轻量模型到 B 级别模型全线覆盖，主线版本体积基本和 GPT-2 系列规模相当, Mini 版力求让普通个人 GPU 也能快速完成训练与复现.
-* 项目同时开源了完整训练链路，覆盖预训练 (Pretrain), 监督微调 (SFT) 等全过程代码.
+* 此开源项目从 0 实现广义递归架构 `Ouro`，并以字节级语言模型 `Gridman` 作为实验载体。
+* Ouro 不是传统逐 token RNN：它在固定小片段内保留局部因果注意力，并维护向量、时间队列和矩阵状态。
+* 在模型配置固定时，持久状态结构不随累计历史长度继续增长；这一性质也存在于 stateful RNN，Ouro 的研究差异在于状态组织、局部注意力和宽度—状态扩展方式。
+* 仓库提供 Pretrain / SFT 训练代码路径；端到端阶段继承、恢复等价性、跨 rank 一致性和扩展效率按各自证据等级验证，不笼统称为已验证的“完整训练链路”。
 * 项目所有核心算法代码均从 0 使用 PyTorch 原生实现, 不依赖第三方库提供的高层抽象接口.
-* 这不仅是一个全新架构的大语言模型全阶段开源项目，也是一套面向 `Ouro` 入门与实践的教程.
+* 这是一套面向 `Ouro` 架构研究、代码阅读和实验复现的开放起点。
 * 希望此项目能为更多人提供一个可复现, 可理解, 可扩展 `Ouro` 的起点, 一起感受状态 AI 模型的魅力, 并推动更广泛 AI 社区的进步, 为未来世界的变革做好准备.
 * 项目交流 QQ 群: 198302483. 答案: State.
 
 > 注：本项目基于 Apache 2.0 协议开源; 训练时长和成本在不同硬件上可能存在较大差异.
+
+## 先读：当前事实与证据边界
+
+Ouro 在广义上属于递归架构。它与 RNN/LSTM/GRU 都会把先前状态带入下一步；差异不在于“有没有状态”，而在于 Ouro 采用 **64 字节级小片段内的局部因果注意力**，并同时维护 `c_state`、`c_state_queue` 和矩阵 `mem`。固定配置下的状态结构与历史长度解耦是一类递归系统的共享属性，不等于无限上下文、无损记忆、恒定总显存或绝对恒定推理速度。
+
+训练采用“**状态连续、梯度截断**”：在同一兼容模型谱系内，正常 Pretrain、SFT、兼容后训练和运行路径默认保留状态；BPTT 边界上的 `mem_detach()` 只截断更早的计算图，不清空状态值。状态 reset 只允许由显式诊断、消融或恢复操作触发。不同宽度属于不同模型谱系，当前不实现 1280→2624 的隐式状态迁移。
+
+当前真实 artifact 是一个 **Pretrain checkpoint**，证据标签为 `PRELIMINARY`。Factory state、实例 snapshot / restore / fork / lineage 和生产隔离属于规划中的 MaPhY Runtime，当前仓库只证明架构和模型对象可以保存已注册状态，不能据此声称 Runtime 已实现。
 
 ---
 
@@ -44,35 +58,35 @@
   <tr>
     <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
       <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">⚙️ Theory</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">理论完备</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Ouro complete</div>
+      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">状态架构原型</div>
+      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Persistent-state prototype</div>
     </td>
     <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
       <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">⚡ Speed</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">恒定速度</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Constant generation speed</div>
+      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">小片段持续处理</div>
+      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Chunkwise processing</div>
     </td>
     <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
       <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">💾 VRAM</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">恒定显存</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Constant VRAM</div>
+      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">固定状态结构</div>
+      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Fixed state under a fixed configuration</div>
     </td>
   </tr>
   <tr>
     <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
       <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">📦 No Cache</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">无需 KV Cache</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Without KV Cache</div>
+      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">非增长式历史路径</div>
+      <div style="color:rgba(255,255,255,0.5); font-size:12px;">No growing token-history KV path</div>
     </td>
     <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
       <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">✨ Learning</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">持续学习</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Continual learning</div>
+      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">前向状态更新</div>
+      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Forward state updates implemented</div>
     </td>
     <td style="background: linear-gradient(145deg,#1a1a1a,#111); border-radius: 16px; padding: 22px; border: 1px solid rgba(255,255,255,0.1); vertical-align: top;">
       <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:10px;">∞ Context</div>
-      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">无限上下文</div>
-      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Infinite ctxlen</div>
+      <div style="color:#fff; font-size:19px; font-weight:600; margin-bottom:6px;">长流行为待验证</div>
+      <div style="color:rgba(255,255,255,0.5); font-size:12px;">Long-stream behavior under evaluation</div>
     </td>
   </tr>
 </table>
@@ -83,13 +97,13 @@
 
 注意力机制以及 `Transformer` 架构的出现, 拉开了了大语言模型和全民 AI 时代的序幕. 从 2022 年 GPT-3.5 第一次震惊世界开始, 时间连带着模型尺寸飞速增长, 整个 AI 世界在朝前狂奔. 但站在真正起作用的底层架构的视角上回顾, 我们似乎一直在原地踏步. 
 
-那么问题是什么? 不存在更优的架构了吗? 并非如此, 我们犯了范式层级的错误: AI 模型正在逐步退化为一种事实上的极大规模函数. 输入被映射为输出, 人类只需要为这个静态怪物不断增加参数.
+那么问题是什么？本项目关注的不是把现有架构简单描述为“无状态”，而是连续性通常由哪一层承担：模型内部递归状态、token/KV 上下文、检索系统和 Agent memory 都可以承载不同形式的连续性。Ouro 探索的是让显式状态直接参与下一片段计算，并为状态保留建立清晰的生命周期契约。
 
 该项目尝试对这一默认前提进行一次彻底的反转. 不再将 AI 视为一个输入驱动的函数近似器, 而是将其构建为一个围绕内部 State 持续运行的系统. 在这一视角下: 
 
-- State 不是缓存
-- 不是附属变量
-- 也不是 prompt 或上下文的延伸或压缩
+- State 不是可随请求任意丢弃的性能缓存
+- State 与 prompt、KV/context、检索和外部 Agent memory 是不同但可互补的机制
+- Self 是产品层对持续保留并更新的内部状态整体的称呼，不表示意识、人格或心理身份
 
 相反, State 是模型的核心主体. 
 
@@ -101,14 +115,14 @@
 
 #### 🎉 本项目包含以下内容
 
-- 提供完整的理论框架, 给出数学上 AGI 必备的完备性理论.
-- 提供完整的 `Ouro` 结构代码，开启全新架构生态.
-- 提供完整的 `Gridman` 语言模型训练代码, 预训练/微调权重同时开源.
+- 提供 `Ouro-Naxi` 持续状态架构及当前实现对应的研究资料；理论推导不等同于已完成实验验证.
+- 提供完整的 `Ouro` 结构代码，作为持续状态架构的开放研究起点.
+- 提供 `Gridman` 的 Pretrain / SFT 训练代码路径；跨阶段状态继承已进入代码契约和自动测试，真实连续训练验证仍待完成.
 - 提供 `ByteTokenizer` 无需任何先验分词器, 支持自定义模板标记扩展.
-- 覆盖 Pretrain, SFT 完整训练流程.
-- 提供全阶段开源数据，覆盖收集, 蒸馏, 清洗与去重后的高质量数据集.
+- 覆盖 Pretrain 与 SFT 入口，并明确区分“从 Pretrain 开始 SFT”和“恢复 SFT”两种 checkpoint 来源.
+- 记录训练数据来源与处理方式；本仓库当前未提供可审计的全阶段数据下载包.
 - 提供原生 `StreamLoader` 数据加载器, 保证数据流贴合架构特性. 
-- 提供原生多卡训练框架, 一键启动.
+- 提供基于 DDP / NCCL 的多卡训练代码路径；跨 rank 一致性与扩展效率仍待系统验证.
 - 关键训练算法与核心模块均从 0 实现, 不依赖第三方框架封装.
 
 #### 🎉 已 (预) 发布架构/模型列表
@@ -125,11 +139,7 @@
 
 | 模型 | 参数量 | 嵌入维度 | Blocks | Layers | Release |
 |------|--------|--------|------|------|---------|
-| Gridman-Naxi-Mini-v0d1 | 52.31 (50.74 + 1.57) M | 512 | 2 | 6 | 2026.04.01 |
-| Gridman-Naxi-Small-v0d1 | 150.47 (145.75 + 4.72) M | 768 | 2 | 8 | 2026.04.01 |
-| Gridman-Naxi-Medium-v0d1 | 396.31 (383.73 + 12.58) M | 1024 | 3 | 8 | 2026.04.01 |
-| Gridman-Naxi-Large-v0d1 | 866.51 (840.30 + 26.21) M | 1280 | 4 | 9 | 2026.04.01 |
-| Gridman-Naxi-XL-v0d1 (即将发布) | 1712.10 (1660.90 + 51.20) M | 1600  | 4 | 12 | 2026.04.01 |
+| Gridman-Naxi-v0d1 Experimental Reference Model | 355.49 M trainable | 1280 | 2 | 4 | Pretrain checkpoint · Preliminary · external |
 
 </details>
 
@@ -141,33 +151,43 @@
 
 </details>
 
-> 注：模型参数组成为 `可训练参数大小` + `状态参数大小`, 其中可训练参数被定义为训练时通过反向传播更新的参数; 模型名称后无显式标注 "即将发布" 的均已发布.
+> **2026-07 审计口径：** 当前源码配置为 `embed_dim=1280`、`blocks=2`、`block_layers=4`、`patch_size=64`、`chunk_size=64`、`bptt_size=7`。行业通用模型规模口径为 **355,491,887 可训练参数**；**365.32M repository tracked scale** 仅作为技术口径，等于可训练参数加 **9,830,400 个矩阵状态元素**。一个配置为 64 个 state slots 的模型对象共有 **15,400,960 个注册持久状态元素**；它是结构 footprint，不是已验证的记忆质量分数。Checkpoint 当前位于仓库外部，其 SHA-256、数据 manifest 与公开发布状态仍待补齐。
+
+### 受控宽度—状态容量扩展研究
+
+以下五档配置只改变 `embed_dim`，共同固定 `blocks=2`、`block_layers=4`、`patch_size=64`、`chunk_size=64` 和 `bptt_size=7`。除 1280 档外均没有训练结果。
+
+| Width | 可训练参数 | 矩阵状态 | 全部注册持久状态 @64 | 证据标签 |
+|---:|---:|---:|---:|---|
+| 512 | 58.05M | 1.57M | 3.80M | `STATIC CONFIGURATION · NOT TRAINED` |
+| 768 | 126.79M | 3.54M | 6.88M | `STATIC CONFIGURATION · NOT TRAINED` |
+| 1280 | 355.49M | 9.83M | 15.40M | `WORKING CHECKPOINT · PRELIMINARY` |
+| 1856 | 744.24M | 20.67M | 28.75M | `STATIC CONFIGURATION · NOT TRAINED` |
+| 2624 | 1.483B | 41.31M | 52.73M | `PLANNED MODEL LINEAGE` |
+
+研究目标是 **characterize width–state scaling behavior**，不是在结果产生前宣称已经证明 scaling law。状态元素数量只描述结构规模，不可直接等同于功能性记忆容量。
 
 ---
 
-# 📌 架构理论
+# 📌 架构定位与理论
 
-#### 💡 无状态模型
+#### 💡 Ouro 与 RNN / LSTM / GRU
 
-为什么我们需要一个状态? 在传统的 RNN 模型中, 状态转移方程通常被如下描述:
+RNN、LSTM 与 GRU 本来就有递归 hidden/cell state。Ouro 在广义上也属于递归架构，状态转移可以抽象为：
 
 $$s_{t+1}, y = f(s_t, x)$$
 
-$x$ 是输入, $y$ 是目标值, 这已经是强约束. 但是对于状态 $s_t$, 这里不存在的一个显式的约束. 这既为架构的设计提供了自由度, 也带来一种冗余性的暗示: $s_t$ 可能是完全多余的. 如果你遵照这种谕示将 $s_t$ 替换为历史输入的一种展平, 那么恭喜你, 你发明了 `Transformer`.
-
-显然, 按照这么理解, `Transformer` 是一种标准的无状态模型.
+$x$ 是当前输入，$y$ 是输出，$s_t$ 是进入下一步的状态。典型 RNN 通常逐 token / timestep 更新 hidden 或 cell state；Ouro 以固定小片段为递归粒度，在片段内部保留局部因果注意力，并维护向量、队列和矩阵三类显式状态。两者在固定配置下都可以具有不随累计历史长度增长的状态形状，因此该性质不被宣称为 Ouro 独有。
 
 #### 💡 基于概率的状态转移模型
 
-哦, 等等, `Transformer` 真的抛弃了 $s_t$ 吗? 非也. 如果将上下文看作状态, 那 `Transformer` 不就描述了一个标准的状态转移
+不能脱离部署方式把 Transformer 简化成“标准无状态模型”。token 上下文、KV cache、检索结果和应用记忆都可以构成运行时状态；如果将上下文看作状态，可以写成：
 
 $$s_{t+1} = T(s_t)$$
 
 吗?
 
-这里其实存在着微妙的区别. 即使我们将上下文看作这里的状态, $T(s_t)$ 实际上也是给出了下一个状态的分布而非具体的状态. 这实际上是一种基于概率的状态转移模型.
-
-是的, 状态在这里依然存在, 只是从模型内部打包到了外部. 此时状态转移的约束完全来自外部约束.
+这里讨论的是状态由哪一层组织，而不是判定某类模型“有没有状态”。典型 decoder-only Transformer 常通过增长的 token/KV 历史承载连续性；Ouro 则把历史影响吸收到固定拓扑的内部递归状态。二者可以与 RAG 或 Agent memory 组合，属于互补机制。
 
 #### 💡 约束状态的隐变量
 
@@ -275,9 +295,9 @@ $$
 
 则称 $F$ 在 $\mathcal{D}$ 上是 **Ouro 完备的**.
 
-#### 💡 AGI
+#### 💡 理论边界
 
-若 $F$ 同时满足 Ouro 完备与图灵完备, 则称 $F$ 是 AGI (Artificial General Intelligence).
+上述“完备”定义属于架构研究中的形式化假设，不构成对 AGI、意识、人格或持续学习效果的产品宣称，也不能替代受控实验、基线比较与消融验证。
 
 ---
 
@@ -325,7 +345,7 @@ class OuroLayer:
 ```
 与目前主流演进方向不同, `Ouro` 并未拥抱所谓 $O(n)$ 的线性注意力, 严格来说是 $O(nd^2)$, 而是全面拥抱 $O(n^2d)$ 复杂度的结构. 即使内部使用了线性注意力, 其实现也也选择了 $O(n^2d)$ 的形式.
 
-这也使得 `Ouro` 在其输入窗口内拥有严格强于 `Transformer` 的表达能力. 同时得益于 `Dyn-FFN` 组件的设计, `Ouro` 在推理时依然能享受到 $O(1)$ 恒定显存和算力需求的福利并实现完全的持续学习.
+当前实现展示了局部注意力与持续状态更新可以在同一架构中组合。表达能力、推理复杂度、显存行为、生成速度和持续学习效果仍需要在固定模型、固定片段长度、明确基线与受控消融条件下验证；实现代码的存在本身不等同于上述结论已经成立。
 
 ## 🚀 核心组件
 
@@ -406,11 +426,22 @@ $$\text{Attn}=\text{LinearAttn}+\Delta\text{LinearAttn}$$
 
 #### Ⅳ 数据加载
 
-> `Gridman` 训练数据集下载地址：[ModelScope]() | [HuggingFace]()
+> 当前仓库尚未提供可审计的训练数据下载包。公开数据前需要补齐来源、许可证、处理流程、版本和 SHA-256；请勿将上述来源说明理解为本项目已经发布完整数据集。
 
 ## 🛠️ 预训练 (Pretrain)
 
 ## 🛠️ 微调 (SFT)
+
+规范生命周期为：
+
+```text
+Pretrain checkpoint
+→ 新建 SFT（加载兼容 Pretrain checkpoint）
+→ 恢复 SFT（加载同谱系 SFT checkpoint）
+→ 兼容后训练
+```
+
+加载 checkpoint 会同时恢复参数、`c_state`、`c_state_queue` 和各层矩阵 `mem`。正常入口不会自动调用 `mem_clear()`；`mem_detach()` 只在 BPTT 边界切断梯度历史。`reset_state_for_ablation()` 是显式实验接口，不属于正常训练或推理生命周期。版本化 checkpoint 保存 stage、step、lineage、parent checkpoint、optimizer、scheduler、RNG、配置和环境元数据；旧 checkpoint 可由 legacy reader 加载，但会明确标记 manifest 不完整。
 
 ---
 
@@ -423,7 +454,7 @@ $$\text{Attn}=\text{LinearAttn}+\Delta\text{LinearAttn}$$
   title = {Ouro: The Next-Gen AI Architecture},
   author = {Jinchang Liu},
   year = {2025},
-  url = {https://github.com/ljc-ouro/ouro},
+  url = {https://github.com/zhihumomo/ouro},
   note = {GitHub repository, accessed 2026}
 }
 ```
@@ -433,24 +464,24 @@ $$\text{Attn}=\text{LinearAttn}+\Delta\text{LinearAttn}$$
 ## 🫶支持者
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date&theme=dark"/>
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ljc-ouro/ouro&type=Date"/>
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zhihumomo/ouro&type=Date&theme=dark"/>
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zhihumomo/ouro&type=Date"/>
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=zhihumomo/ouro&type=Date"/>
 </picture>
 
-<a href="https://github.com/ljc-ouro/ouro/stargazers">
+<a href="https://github.com/zhihumomo/ouro/stargazers">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://reporoster.com/stars/dark/ljc-ouro/ouro"/>
-      <source media="(prefers-color-scheme: light)" srcset="https://reporoster.com/stars/ljc-ouro/ouro"/>
-      <img alt="Star poster" src="https://reporoster.com/stars/ljc-ouro/ouro"/>
+      <source media="(prefers-color-scheme: dark)" srcset="https://reporoster.com/stars/dark/zhihumomo/ouro"/>
+      <source media="(prefers-color-scheme: light)" srcset="https://reporoster.com/stars/zhihumomo/ouro"/>
+      <img alt="Star poster" src="https://reporoster.com/stars/zhihumomo/ouro"/>
     </picture>
 </a>
 
-<a href="https://github.com/ljc-ouro/ouro/network/members">
+<a href="https://github.com/zhihumomo/ouro/network/members">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://reporoster.com/forks/dark/ljc-ouro/ouro"/>
-      <source media="(prefers-color-scheme: light)" srcset="https://reporoster.com/forks/ljc-ouro/ouro"/>
-      <img alt="Fork poster" src="https://reporoster.com/forks/ljc-ouro/ouro"/>
+      <source media="(prefers-color-scheme: dark)" srcset="https://reporoster.com/forks/dark/zhihumomo/ouro"/>
+      <source media="(prefers-color-scheme: light)" srcset="https://reporoster.com/forks/zhihumomo/ouro"/>
+      <img alt="Fork poster" src="https://reporoster.com/forks/zhihumomo/ouro"/>
     </picture>
 </a>
 

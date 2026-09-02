@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import os
 
 import torch
-from naxi.v_0d1.gridman.lm_kernel import ByteTokenizer
+from naxi.v_0d2.gridman.lm_kernel import ByteTokenizer
     
     
 @dataclass
@@ -19,8 +19,8 @@ class Config:
     # 分词器
     tokenizer: ByteTokenizer = ByteTokenizer()
 
-    chunk_size: int = 128
-    bptt_size: int = 8
+    chunk_size: int = 64
+    bptt_size: int = 6
 
     # 预训练配置
     pretrain_train_file: str = f'/root/autodl-tmp/pretrain.jsonl'
@@ -29,11 +29,11 @@ class Config:
 
     # SFT 配置
     sft_train_file: str = f'/root/autodl-tmp/sft.jsonl'
-    sft_lr: float = 6e-5
+    sft_lr: float = 1e-4
     sft_steps: int = 1056000
 
     # 版本号
-    version: str = 'v_0d1'
+    version: str = 'v_0d2'
 
     # 运行信息
     device_type: str = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -50,32 +50,35 @@ GRIDMAN_MINI = Config()
 GRIDMAN_SMALL = Config(
     'gridman_small',
     768,
-    chunk_size=128,
-    bptt_size=7,
+    blocks=2, 
+    chunk_size=64,
+    bptt_size=6,
 
-    pretrain_lr=2.11e-4,
+    pretrain_lr=3e-4,
     pretrain_steps=1056000*2,
 
-    sft_lr=4.2e-5,
+    sft_lr=1e-4,
     sft_steps=1056000*2
 )
 
 GRIDMAN_MEDIUM = Config(
     'gridman_medium',
-    1280,
+    1024,
+    blocks=3, 
     chunk_size=64,
-    bptt_size=7,
+    bptt_size=4,
 
-    pretrain_lr=1.5e-4,
+    pretrain_lr=3e-4,
     pretrain_steps=1056000*2,
 
     sft_lr = 1e-4,
-    sft_steps = 4200000
+    sft_steps = 1056000*2
 )
 
 GRIDMAN_LARGE = Config(
     'gridman_large',
-    1856,
+    1280,
+    blocks=4,
     chunk_size=64,
     bptt_size=6,
    
@@ -91,30 +94,5 @@ GRIDMAN_XL = Config(
 )
 
 
-# Controlled width-state family. Only embed_dim changes across these configs;
-# the current 1280-width checkpoint is the sole trained point. The remaining
-# configs are structural references until a controlled run is completed.
-CONTROLLED_WIDTHS = (512, 768, 1280, 1856, 2624)
-
-
-def make_controlled_width_config(embed_dim: int) -> Config:
-    if embed_dim not in CONTROLLED_WIDTHS:
-        raise ValueError(f"Unsupported controlled width: {embed_dim}")
-    return Config(
-        name=f"ouro_width_{embed_dim}",
-        embed_dim=embed_dim,
-        block_layers=4,
-        blocks=2,
-        patch_size=64,
-        chunk_size=64,
-        bptt_size=7,
-    )
-
-
-CONTROLLED_WIDTH_CONFIGS = {
-    width: make_controlled_width_config(width)
-    for width in CONTROLLED_WIDTHS
-}
-
-
 RUNNING_CONFIG = GRIDMAN_MEDIUM
+
